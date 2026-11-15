@@ -18,7 +18,7 @@ function toRunnerExam(e: PublicExam): Exam {
 }
 
 export default function App() {
-  const [mode, setMode] = useState<"home" | "ap" | "apexam" | "ib">("home");
+  const [mode, setMode] = useState<"home" | "appractice" | "apexam" | "ib">("home");
   const [homeEmail, setHomeEmail] = useState<string | null>(null);
   const [homeLogin, setHomeLogin] = useState(false);
   useEffect(() => {
@@ -28,7 +28,7 @@ export default function App() {
   }, []);
   if (homeLogin) return (<><button onClick={() => setHomeLogin(false)} className="absolute left-4 top-4 text-sm text-blue-700 hover:underline">← Back</button><Login onSignedIn={() => setHomeLogin(false)} /></>);
   if (mode === "ib") return <IbPractice onBack={() => setMode("home")} />;
-  if (mode === "ap") return <ApPractice onBack={() => setMode("home")} onExam={() => setMode("apexam")} />;
+  if (mode === "appractice") return <ApPractice onBack={() => setMode("home")} onExam={() => setMode("apexam")} />;
   if (mode === "apexam") return <ApExam />;
   return (
     <main className="duo flex-1 flex items-center justify-center px-4 py-10 relative">
@@ -40,7 +40,7 @@ export default function App() {
         <h1 className="text-4xl font-extrabold text-green-600 mb-1">AP / IB Practice</h1>
         <p className="font-bold text-gray-400 mb-8">Choose a question bank</p>
         <div className="grid sm:grid-cols-2 gap-4">
-          <button onClick={() => setMode("ap")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
+          <button onClick={() => setMode("appractice")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-sky-600">AP</span>
             <span className="text-sm font-bold text-gray-500">Calculus AB practice by unit, plus a timed mock exam</span>
           </button>

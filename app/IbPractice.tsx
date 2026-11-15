@@ -2,16 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { supabase } from "@/lib/browser";
 import { fetchProgress, IB_GROUPS, loadQuestions, loadTree, saveProgress, sortSubtopics, sortTopics, type Done, type IbMeta, type IbQuestion, type Mark } from "@/lib/ib";
 import Login from "./Login";
-
-const Md = ({ children }: { children: string }) => (
-  <div className="exam-serif ib-md"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{children}</ReactMarkdown></div>
-);
+import { Md } from "./Md";
 
 // per-browser record of questions the student has looked at the answer of: { "<group>": { REF: 1 } }
 const CELL: Record<Mark, string> = { 1: "bg-green-100 border-green-400 text-green-800", c: "bg-green-500 border-green-700 text-white", p: "bg-amber-400 border-amber-600 text-white", w: "bg-red-500 border-red-700 text-white" };
