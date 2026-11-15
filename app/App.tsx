@@ -6,6 +6,7 @@ import type { Answers, Attempt, ExamState, PublicExam, Result } from "@/lib/type
 import Login from "./Login";
 import Runner, { type Exam } from "./Runner";
 import IbPractice from "./IbPractice";
+import ApPractice from "./ApPractice";
 
 // the API sends sections as a list with time_minutes; the runner reads them by id
 function toRunnerExam(e: PublicExam): Exam {
@@ -17,7 +18,7 @@ function toRunnerExam(e: PublicExam): Exam {
 }
 
 export default function App() {
-  const [mode, setMode] = useState<"home" | "ap" | "ib">("home");
+  const [mode, setMode] = useState<"home" | "ap" | "apexam" | "ib">("home");
   const [homeEmail, setHomeEmail] = useState<string | null>(null);
   const [homeLogin, setHomeLogin] = useState(false);
   useEffect(() => {
@@ -27,7 +28,8 @@ export default function App() {
   }, []);
   if (homeLogin) return (<><button onClick={() => setHomeLogin(false)} className="absolute left-4 top-4 text-sm text-blue-700 hover:underline">← Back</button><Login onSignedIn={() => setHomeLogin(false)} /></>);
   if (mode === "ib") return <IbPractice onBack={() => setMode("home")} />;
-  if (mode === "ap") return <ApExam />;
+  if (mode === "ap") return <ApPractice onBack={() => setMode("home")} onExam={() => setMode("apexam")} />;
+  if (mode === "apexam") return <ApExam />;
   return (
     <main className="duo flex-1 flex items-center justify-center px-4 py-10 relative">
       <div className="absolute right-4 top-3 text-sm font-bold text-gray-500 flex items-center gap-3">
@@ -40,7 +42,7 @@ export default function App() {
         <div className="grid sm:grid-cols-2 gap-4">
           <button onClick={() => setMode("ap")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-sky-600">AP</span>
-            <span className="text-sm font-bold text-gray-500">Calculus AB timed mock exam (sign in required)</span>
+            <span className="text-sm font-bold text-gray-500">Calculus AB practice by unit, plus a timed mock exam</span>
           </button>
           <button onClick={() => setMode("ib")} className="duo-card hover:-translate-y-1 hover:border-green-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-green-600">IB</span>
