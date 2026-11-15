@@ -56,7 +56,8 @@ const fixMath = (md: string) => md.replace(/\\tag\*?\{((?:[^{}]|\{(?:[^{}]|\{[^{
 function withImages(md: string, subjectName: string, topic: string, subtopic: string) {
   md = fixMath(md);
   const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL!.trim()}/storage/v1/object/public/questions/${encodeURI(`${subjectName}/${topic}/${subtopic}/images/`)}`;
-  const url = (name: string) => `](${base}${encodeURI(name).replace(/\(/g, "%28").replace(/\)/g, "%29")})`;
+  // every raster image has a WebP copy next to it (<name>.webp); vector images are used as they are
+  const url = (name: string) => `](${base}${encodeURI(/\.svg$/i.test(name) ? name : `${name}.webp`).replace(/\(/g, "%28").replace(/\)/g, "%29")})`;
   return md.replace(/\]\(<images\/([^>]+)>\)/g, (_, n) => url(n)).replace(/\]\(images\/([^)\s]+)\)/g, (_, n) => url(n));
 }
 
