@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+html, body { height: 100%; }
+body { background: #fff; color: #111827; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+
+/* the serif face the SAT runner uses for source questions */
+.exam-serif { font-family: "STIX Two Text", "Times New Roman", Georgia, serif; font-size: 1.125rem; line-height: 1.7; }
+.katex { font-size: 1.1em; }
+
+/* IB markdown: tables and images from the question bank */
+.ib-md p { margin: 0.5rem 0; }
+.ib-md img { max-width: 100%; height: auto; }
+.ib-md table { border-collapse: collapse; margin: 0.75rem 0; }
+.ib-md td, .ib-md th { padding: 0.25rem 0.75rem; }
+.ib-md ol, .ib-md ul { padding-left: 1.5rem; }
+.ib-md ol { list-style: decimal; } .ib-md ul { list-style: disc; }
+.katex-display { overflow-x: auto; overflow-y: hidden; }
+
+/* Duolingo-style shell (same look as the SAT site): chunky 3D buttons, bold rounded chips and cards.
+   Scoped to .duo so the timed exam screen keeps its own look. */
+.duo { font-family: var(--font-nunito), ui-sans-serif, system-ui, sans-serif; font-weight: 600; background: #fff; }
+.duo h1, .duo h2, .duo .btn-duo { font-family: var(--font-baloo-2), var(--font-nunito), ui-sans-serif, sans-serif; letter-spacing: -0.02em; }
+.duo .exam-serif { font-weight: 500; }
+.btn-duo { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border-radius: 1rem; border-bottom-width: 4px; padding: .7rem 1.5rem; font-weight: 700; transition: all .12s; }
+.btn-duo:active:not(:disabled) { transform: translateY(3px); border-bottom-width: 1px; }
+.btn-duo:disabled { opacity: .4; cursor: not-allowed; }
+.btn-duo-primary { background: #22c55e; border-color: #15803d; color: #fff; }
+.btn-duo-primary:hover:not(:disabled) { background: #4ade80; }
+.btn-duo-secondary { background: #0ea5e9; border-color: #0369a1; color: #fff; }
+.btn-duo-outline { background: #fff; border: 2px solid #e5e7eb; border-bottom-width: 4px; color: #6b7280; }
+.btn-duo-outline:hover:not(:disabled) { background: #f9fafb; }
+.chip { border-radius: 1rem; border: 2px solid #e5e7eb; background: #fff; padding: .3rem .85rem; font-size: .875rem; font-weight: 800; color: #4b5563; transition: all .12s; }
+.chip:hover { border-color: #d1d5db; }
+.chip-active { background: #0ea5e9; border-color: #0ea5e9; color: #fff; }
+.chip-active:hover { border-color: #0ea5e9; }
+.duo-card { border-radius: 1rem; border: 2px solid #f3f4f6; background: #fff; box-shadow: 0 4px 6px -1px rgb(229 231 235 / .7); transition: all .2s; }
+.duo-pick { border-radius: 1rem; border: 2px solid #e5e7eb; border-bottom-width: 4px; background: #fff; transition: all .12s; }
+.duo-pick:hover:not(:disabled) { background: #f0f9ff; border-color: #7dd3fc; }
+.duo-pick:active:not(:disabled) { transform: translateY(2px); border-bottom-width: 2px; }
+.duo-right { background: #dcfce7 !important; border-color: #22c55e !important; }
+.duo-wrong { background: #fee2e2 !important; border-color: #ef4444 !important; }

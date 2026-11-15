@@ -1,0 +1,12 @@
+node_modules
+.next
+next-env.d.ts
+tsconfig.tsbuildinfo
+.env*.local
+
+# AP exam content and local-only files (not published)
+/data/
+/public/exam-images/
+__pycache__/
+*.pyc
+.env*
