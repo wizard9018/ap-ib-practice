@@ -6,6 +6,7 @@ import type { Mark } from "@/lib/ib";
 import { Md, MdMath } from "./Md";
 import Navigator from "./Navigator";
 import { TOPICS } from "./apTopics";
+import { MERGES } from "./apGroups";
 
 // College Board CED units of AP Calculus (BC adds 9 and 10)
 const UNITS: Record<number, string> = {
@@ -177,15 +178,21 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
                     Unit {u}: {name}
                   </label>
                   <div className="mt-2 space-y-1 pl-6">
-                    {codes.map((t) => (
-                      <label key={t} className="flex items-start gap-2 cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5">
-                        <input type="checkbox" className="mt-1" checked={sel.has(t)} onChange={(e) => toggle([t], e.target.checked)} />
-                        <span className="flex-1">
-                          {t} {TOPICS[t].name}{TOPICS[t].bcOnly && <span className="ml-2 text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5">BC only</span>}
-                        </span>
-                        <span className="text-gray-500 text-xs whitespace-nowrap pt-0.5">{tab === "fr" ? `${stats[t].fr} FR · ${stats[t].frFin} done` : `${stats[t].mc} MC · ${stats[t].fr} FR · ${stats[t].fin} done`}</span>
-                      </label>
-                    ))}
+                    {codes.flatMap((t) => {
+                      const m = MERGES.find((g) => g.codes.includes(t));
+                      if (m && t !== m.codes.find((c) => codes.includes(c))) return [];
+                      const cs = m ? m.codes.filter((c) => codes.includes(c)) : [t];
+                      const sum = (k: "mc" | "fr" | "fin" | "frFin") => cs.reduce((n, c) => n + stats[c][k], 0);
+                      return [(
+                        <label key={t} className="flex items-start gap-2 cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5">
+                          <input type="checkbox" className="mt-1" checked={cs.every((c) => sel.has(c))} onChange={(e) => toggle(cs, e.target.checked)} />
+                          <span className="flex-1">
+                            {m ? m.name : `${t} ${TOPICS[t].name}`}{cs.every((c) => TOPICS[c].bcOnly) && <span className="ml-2 text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5">BC only</span>}
+                          </span>
+                          <span className="text-gray-500 text-xs whitespace-nowrap pt-0.5">{tab === "fr" ? `${sum("fr")} FR · ${sum("frFin")} done` : `${sum("mc")} MC · ${sum("fr")} FR · ${sum("fin")} done`}</span>
+                        </label>
+                      )];
+                    })}
                   </div>
                 </div>
               );
