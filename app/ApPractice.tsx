@@ -6,29 +6,32 @@ import type { Mark } from "@/lib/ib";
 import { Md, MdMath } from "./Md";
 import Navigator from "./Navigator";
 
-// College Board CED units of AP Calculus AB
+// College Board CED units of AP Calculus (BC adds 9 and 10)
 const UNITS: Record<number, string> = {
   1: "Limits and Continuity", 2: "Differentiation: Definition and Fundamental Properties", 3: "Differentiation: Composite, Implicit, and Inverse Functions",
   4: "Contextual Applications of Differentiation", 5: "Analytical Applications of Differentiation", 6: "Integration and Accumulation of Change",
   7: "Differential Equations", 8: "Applications of Integration",
+  9: "Parametric Equations, Polar Coordinates, and Vector-Valued Functions", 10: "Infinite Sequences and Series",
 };
+type Course = "ab" | "bc";
+const unitsOf = (c: Course) => Object.entries(UNITS).filter(([u]) => c === "bc" || +u <= 8);
 const KINDS = [["all", "All"], ["mc", "MC"], ["fr", "FR"]] as const;
 type Item = { label: string; text: string };
 type Brief = { id: string; unit: number; kind: "mc" | "fr" };
 type Row = Brief & { year: number | null; number: string; prompt: string; choices: Item[]; parts: Item[]; answer: string | null; rubric: string | null };
 type Done = Record<string, Mark>;
-const KEY = "ap-calc-ab-done-v1";
-const readDone = (): Done => { try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; } };
+const keyOf = (c: Course) => `ap-calc-${c}-done-v1`;
+const readDone = (c: Course): Done => { try { return JSON.parse(localStorage.getItem(keyOf(c)) ?? "{}"); } catch { return {}; } };
 const stripLabel = (t: string) => t.replace(/^\(?[A-E][).]\s*/, "");
 
 // the unit list needs only the counts; a unit's full rows are fetched when it is opened
-async function loadBriefs(): Promise<Brief[]> {
-  const { data, error } = await supabase.from("ap_practice").select("id,unit,kind").eq("course", "ab").range(0, 4999);
+async function loadBriefs(course: Course): Promise<Brief[]> {
+  const { data, error } = await supabase.from("ap_practice").select("id,unit,kind").eq("course", course).range(0, 4999);
   if (error || !data) throw new Error("Could not load AP Calculus questions.");
   return data as Brief[];
 }
-async function loadUnit(unit: number): Promise<Row[]> {
-  const { data, error } = await supabase.from("ap_practice").select("id,unit,kind,year,number,prompt,choices,parts,answer,rubric").eq("course", "ab").eq("unit", unit).order("year", { ascending: false }).order("id");
+async function loadUnit(course: Course, unit: number): Promise<Row[]> {
+  const { data, error } = await supabase.from("ap_practice").select("id,unit,kind,year,number,prompt,choices,parts,answer,rubric").eq("course", course).eq("unit", unit).order("year", { ascending: false }).order("id");
   if (error || !data) throw new Error("Could not load this unit.");
   return data as Row[];
 }
@@ -45,6 +48,12 @@ const Prompt = memo(function Prompt({ q }: { q: Row }) {
 });
 
 export default function ApPractice({ onBack, onExam }: { onBack: () => void; onExam: () => void }) {
+  const [course, setCourse] = useState<Course>("ab");
+  return <Practice key={course} course={course} onCourse={setCourse} onBack={onBack} onExam={onExam} />;
+}
+
+function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCourse: (c: Course) => void; onBack: () => void; onExam: () => void }) {
+  const COURSE = course.toUpperCase();
   const [briefs, setBriefs] = useState<Brief[] | null>(null);
   const [error, setError] = useState("");
   const [unit, setUnit] = useState<number | null>(null);
@@ -62,13 +71,13 @@ export default function ApPractice({ onBack, onExam }: { onBack: () => void; onE
   const [split, setSplit] = useState(50);
   const splitRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setDone(readDone()); setDoneLoaded(true); loadBriefs().then(setBriefs).catch((e: Error) => setError(e.message)); }, []);
+  useEffect(() => { setDone(readDone(course)); setDoneLoaded(true); loadBriefs(course).then(setBriefs).catch((e: Error) => setError(e.message)); }, [course]);
   // one write per committed change (not inside the state updater)
-  useEffect(() => { if (doneLoaded) try { localStorage.setItem(KEY, JSON.stringify(done)); } catch { /* private mode: progress just isn't kept */ } }, [done, doneLoaded]);
+  useEffect(() => { if (doneLoaded) try { localStorage.setItem(keyOf(course), JSON.stringify(done)); } catch { /* private mode: progress just isn't kept */ } }, [done, doneLoaded, course]);
 
   const stats = useMemo(() => {
     const m: Record<number, { mc: number; fr: number; fin: number }> = {};
-    for (const u of Object.keys(UNITS)) m[+u] = { mc: 0, fr: 0, fin: 0 };
+    for (const [u] of unitsOf(course)) m[+u] = { mc: 0, fr: 0, fin: 0 };
     for (const r of briefs ?? []) if (m[r.unit]) { m[r.unit][r.kind]++; if (done[r.id]) m[r.unit].fin++; }
     return m;
   }, [briefs, done]);
@@ -81,7 +90,7 @@ export default function ApPractice({ onBack, onExam }: { onBack: () => void; onE
   const go = (n: number) => setIdx(Math.max(0, Math.min(shown.length - 1, n)));
   const choose = (r: Row, L: string) => { setPicks((p) => ({ ...p, [r.id]: L })); mark(r.id, r.answer ? (L === r.answer ? "c" : "w") : 1); };
   const cross = (id: string, L: string) => setCrossed((c) => { const cur = c[id] ?? []; return { ...c, [id]: cur.includes(L) ? cur.filter((x) => x !== L) : [...cur, L] }; });
-  const open = (u: number) => { setUnit(u); setUnitRows(null); setIdx(0); setKind("all"); loadUnit(u).then(setUnitRows).catch((e: Error) => setError(e.message)); };
+  const open = (u: number) => { setUnit(u); setUnitRows(null); setIdx(0); setKind("all"); loadUnit(course, u).then(setUnitRows).catch((e: Error) => setError(e.message)); };
   const onMove = (e: React.PointerEvent) => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId) || !splitRef.current) return;
     const r = splitRef.current.getBoundingClientRect();
@@ -114,17 +123,20 @@ export default function ApPractice({ onBack, onExam }: { onBack: () => void; onE
         <span className="font-semibold tracking-wide text-blue-700">AP Practice</span>
         <button onClick={onBack} className="text-gray-400 underline hover:text-gray-600">Back</button>
       </div>
-      <h1 className="text-2xl font-bold mt-1">AP Calculus AB</h1>
+      <div className="flex items-center gap-2 mt-1">
+        <h1 className="text-2xl font-bold">AP Calculus {COURSE}</h1>
+        {(["ab", "bc"] as const).map((c) => <button key={c} onClick={() => onCourse(c)} className={`text-sm px-2 py-1 rounded font-medium ${c === course ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-blue-100"}`}>{c.toUpperCase()}</button>)}
+      </div>
       <p className="text-gray-600 mt-1">Practice by College Board unit</p>
       <div className="mt-6 space-y-3 text-sm">
-        {Object.entries(UNITS).map(([u, name]) => (
+        {unitsOf(course).map(([u, name]) => (
           <button key={u} onClick={() => open(+u)} className="w-full text-left rounded-lg bg-gray-50 p-3 hover:bg-blue-50">
             <div className="font-semibold">Unit {u}: {name}</div>
             <div className="text-gray-500">{stats[+u].mc} multiple choice · {stats[+u].fr} free response · {stats[+u].fin} done</div>
           </button>
         ))}
       </div>
-      <button onClick={onExam} className="mt-6 w-full rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700">Take the timed 2008 mock exam</button>
+      {course === "ab" && <button onClick={onExam} className="mt-6 w-full rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700">Take the timed 2008 mock exam</button>}
     </>,
   );
 
@@ -138,7 +150,7 @@ export default function ApPractice({ onBack, onExam }: { onBack: () => void; onE
   return (
     <div className="flex flex-col h-screen">
       <header className="flex items-center justify-between bg-blue-50 border-b border-blue-100 px-4 py-2">
-        <div className="text-sm font-medium text-gray-800">AP Calculus AB · Unit {unit}: {UNITS[unit]}</div>
+        <div className="text-sm font-medium text-gray-800">AP Calculus {COURSE} · Unit {unit}: {UNITS[unit]}</div>
         <div className="flex items-center gap-2">
           {KINDS.map(([k, label]) => (
             <button key={k} onClick={() => { setKind(k); setIdx(0); }} className={`text-sm px-2 py-1 rounded font-medium ${kind === k ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-blue-100"}`}>{label}</button>
