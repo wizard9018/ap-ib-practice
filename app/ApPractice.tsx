@@ -19,7 +19,7 @@ const unitsOf = (c: Course) => Object.entries(UNITS).filter(([u]) => c === "bc" 
 const KINDS = [["all", "All"], ["mc", "MC"], ["fr", "FR"]] as const;
 type Item = { label: string; text: string };
 type Brief = { id: string; topic: string | null; kind: "mc" | "fr"; papers: string[] };
-type Row = Brief & { year: number | null; number: string; prompt: string; choices: Item[]; parts: Item[]; answer: string | null; rubric: string | null; paper_numbers: Record<string, number> };
+type Row = Brief & { year: number | null; number: string; prompt: string; choices: Item[]; parts: Item[]; answer: string | null; rubric: string | null; paper_numbers: Record<string, number>; figures: { p: string[]; c: Record<string, string> } | null };
 type Source = { title: string; label: string; topics?: string[]; paper?: string };
 const TOPIC_ORDER = Object.keys(TOPICS);
 const topicsOfUnit = (u: string, c: Course) => TOPIC_ORDER.filter((t) => t.split(".")[0] === u && (c === "bc" || !TOPICS[t].bcOnly));
@@ -35,7 +35,7 @@ async function loadBriefs(): Promise<Brief[]> {
   return data as Brief[];
 }
 async function loadRows(src: Source): Promise<Row[]> {
-  const q = supabase.from("ap_practice").select("id,topic,kind,papers,paper_numbers,year,number,prompt,choices,parts,answer,rubric");
+  const q = supabase.from("ap_practice").select("id,topic,kind,papers,paper_numbers,year,number,prompt,choices,parts,answer,rubric,figures");
   const { data, error } = await (src.paper ? q.contains("papers", [src.paper]) : q.in("topic", src.topics ?? [])).range(0, 4999);
   if (error || !data) throw new Error("Could not load these questions.");
   const rows = data as Row[];
@@ -51,6 +51,7 @@ const Prompt = memo(function Prompt({ q }: { q: Row }) {
     <div className="p-6 max-w-none exam-serif">
       <p className="text-xs text-gray-400 mb-2">{q.kind === "mc" ? "Multiple choice" : "Free response"}{q.year ? ` · ${q.year}` : ""}{q.number ? ` · Question ${q.number}` : ""}{q.topic && TOPICS[q.topic] ? ` · ${q.topic} ${TOPICS[q.topic].name}` : ""}</p>
       <Md>{q.prompt}</Md>
+      {q.figures?.p.map((u) => <img key={u} src={u} alt="" className="my-3 max-w-full h-auto" />)}
       {q.kind === "fr" && q.parts.map((p) => <div key={p.label} className="mt-2"><strong>({p.label})</strong> <Md>{p.text}</Md></div>)}
     </div>
   );
@@ -254,7 +255,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
                           <button onClick={() => choose(q, c.label)} disabled={out || Boolean(chosen)}
                             className={`flex-1 flex items-center gap-3 border-2 rounded-lg px-3 py-1.5 text-left transition-colors ${choiceClass(c.label)} ${out ? "opacity-40 cursor-not-allowed" : ""}`}>
                             <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full border-2 shrink-0 text-xs font-semibold ${chosen === c.label ? "bg-blue-600 border-blue-600 text-white" : "border-gray-400 text-gray-700"}`}>{c.label}</span>
-                            <span className={`exam-serif ib-md !text-base ${out ? "line-through" : ""}`}><MdMath>{stripLabel(c.text)}</MdMath></span>
+                            <span className={`exam-serif ib-md !text-base ${out ? "line-through" : ""}`}><MdMath>{stripLabel(c.text)}</MdMath>{q.figures?.c[c.label] && <img src={q.figures.c[c.label]} alt="" className="block max-h-32 w-auto" />}</span>
                           </button>
                           {eliminator && !chosen && (
                             <button onClick={() => cross(q.id, c.label)} className="w-7 h-7 rounded-full border border-gray-400 text-gray-500 text-xs shrink-0 relative" title={out ? "Undo cross-out" : "Cross out this choice"}>

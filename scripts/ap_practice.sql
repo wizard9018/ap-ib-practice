@@ -23,3 +23,6 @@ alter table public.ap_practice add column if not exists papers text[] not null d
 alter table public.ap_practice add column if not exists paper_numbers jsonb not null default '{}'::jsonb;
 create index if not exists ap_practice_topic on public.ap_practice (topic);
 create index if not exists ap_practice_papers on public.ap_practice using gin (papers);
+
+-- figures: {"p": [image urls shown under the question], "c": {"A": image url for that choice}}
+alter table public.ap_practice add column if not exists figures jsonb;
