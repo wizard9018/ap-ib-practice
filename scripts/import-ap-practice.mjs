@@ -1,11 +1,11 @@
-// Replaces the ap_practice table with data/ap-calc-practice-final.json + data/ap-calc-practice-figs.json (figure questions; images go to the public ap-figures bucket).
+// Replaces the ap_practice table with data/ap-calc-practice-final.json + ap-calc-practice-figs.json (figure MC) + ap-calc-practice-frfigs.json (figure FR); images go to the public ap-figures bucket.
 // Run mini/scripts/ap_practice.sql first.
 //   node --env-file=.env.local scripts/import-ap-practice.mjs
 import { readFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
 
 const readJson = async (f) => JSON.parse(await readFile(new URL(`../../data/${f}`, import.meta.url), "utf8"));
-const rows = [...(await readJson("ap-calc-practice-final.json")), ...(await readJson("ap-calc-practice-figs.json"))].filter((r) => r.unit != null); // a precalculus-only figure question has no unit
+const rows = [...(await readJson("ap-calc-practice-final.json")), ...(await readJson("ap-calc-practice-figs.json")), ...(await readJson("ap-calc-practice-frfigs.json"))].filter((r) => r.unit != null); // a precalculus-only figure question has no unit
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL.trim(), process.env.SUPABASE_SERVICE_ROLE_KEY.trim(), { auth: { persistSession: false, autoRefreshToken: false } });
 { const { error } = await db.from("ap_practice").select("papers,paper_numbers,figures").limit(1); if (error) throw new Error(`run the ALTER statements in ap_practice.sql first (${error.message})`); }
 // figure images -> public bucket, rows get their public urls
