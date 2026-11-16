@@ -4,4 +4,5 @@ export const MERGES: { name: string; codes: string[] }[] = [
   { name: "1.10–1.13 Continuity and Discontinuities", codes: ["1.10", "1.11", "1.12", "1.13"] },
   { name: "1.14–1.15 Infinite Limits and Limits at Infinity", codes: ["1.14", "1.15"] },
   { name: "2.2–2.3 Defining the Derivative and Estimating Derivatives at a Point", codes: ["2.2", "2.3"] },
+  { name: "2.7 + 2.10 Derivatives of Trig, Exponential and Log Functions", codes: ["2.7", "2.10"] },
 ];
