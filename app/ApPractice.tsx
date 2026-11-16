@@ -49,7 +49,7 @@ async function loadRows(src: Source): Promise<Row[]> {
     if (data.length < 1000) break;
   }
   const p = src.paper;
-  rows.sort(p ? (x, y) => (x.paper_numbers[p] ?? 0) - (y.paper_numbers[p] ?? 0)
+  rows.sort(p ? (x, y) => +(x.kind === "fr") - +(y.kind === "fr") || (x.paper_numbers[p] ?? 0) - (y.paper_numbers[p] ?? 0)
     : (x, y) => TOPIC_ORDER.indexOf(x.topic ?? "") - TOPIC_ORDER.indexOf(y.topic ?? "") || (y.year ?? 0) - (x.year ?? 0) || x.id.localeCompare(y.id));
   return rows;
 }
@@ -105,8 +105,8 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
     return m;
   }, [briefs, done, course]);
   const papers = useMemo(() => {
-    const m: Record<string, { n: number; fin: number }> = {};
-    for (const r of briefs ?? []) for (const p of r.papers ?? []) if (p.startsWith(course + "-")) { const e = (m[p] ??= { n: 0, fin: 0 }); e.n++; if (done[r.id]) e.fin++; }
+    const m: Record<string, { mc: number; fr: number; fin: number }> = {};
+    for (const r of briefs ?? []) for (const p of r.papers ?? []) if (p.startsWith(course + "-")) { const e = (m[p] ??= { mc: 0, fr: 0, fin: 0 }); e[r.kind]++; if (done[r.id]) e.fin++; }
     return Object.entries(m).sort((x, y) => +y[0].slice(3) - +x[0].slice(3));
   }, [briefs, done, course]);
   const selCount = useMemo(() => [...sel].reduce((n, t) => n + (stats[t] ? stats[t].mc + stats[t].fr : 0), 0), [sel, stats]);
@@ -198,12 +198,12 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
         </>
       ) : (
         <>
-          <p className="text-gray-600 mt-3 text-sm">The multiple-choice questions of each past paper, together in exam order.</p>
+          <p className="text-gray-600 mt-3 text-sm">Each past paper as a whole: the multiple-choice questions, then the free-response questions, in exam order.</p>
           <div className="mt-4 space-y-2 text-sm">
             {papers.map(([p, e]) => (
               <button key={p} onClick={() => open({ title: `${p.slice(3)} ${COURSE} exam`, label: "MOCK EXAM", paper: p })} className="w-full text-left rounded-lg bg-gray-50 p-3 hover:bg-blue-50">
                 <div className="font-semibold">{p.slice(3)} AP Calculus {COURSE}</div>
-                <div className="text-gray-500">{e.n} multiple choice · {e.fin} done</div>
+                <div className="text-gray-500">{[e.mc > 0 && `${e.mc} multiple choice`, e.fr > 0 && `${e.fr} free response`, `${e.fin} done`].filter(Boolean).join(" · ")}</div>
               </button>
             ))}
           </div>
