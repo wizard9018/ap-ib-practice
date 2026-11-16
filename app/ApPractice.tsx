@@ -20,7 +20,7 @@ const KINDS = [["all", "All"], ["mc", "MC"], ["fr", "FR"]] as const;
 type Item = { label: string; text: string };
 type Brief = { id: string; topic: string | null; kind: "mc" | "fr"; papers: string[] };
 type Row = Brief & { year: number | null; number: string; prompt: string; choices: Item[]; parts: Item[]; answer: string | null; rubric: string | null; paper_numbers: Record<string, number>; figures: { p: string[]; c: Record<string, string> } | null };
-type Source = { title: string; label: string; topics?: string[]; paper?: string };
+type Source = { title: string; label: string; topics?: string[]; paper?: string; only?: "fr" };
 const TOPIC_ORDER = Object.keys(TOPICS);
 const topicsOfUnit = (u: string, c: Course) => TOPIC_ORDER.filter((t) => t.split(".")[0] === u && (c === "bc" || !TOPICS[t].bcOnly));
 type Done = Record<string, Mark>;
@@ -75,7 +75,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   const COURSE = course.toUpperCase();
   const [briefs, setBriefs] = useState<Brief[] | null>(null);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"topics" | "papers">("topics");
+  const [tab, setTab] = useState<"topics" | "fr" | "papers">("topics");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [src, setSrc] = useState<Source | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -98,9 +98,9 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
 
   // per-topic counts (BC-only topics are hidden from AB) and the list of past papers of this course
   const stats = useMemo(() => {
-    const m: Record<string, { mc: number; fr: number; fin: number }> = {};
+    const m: Record<string, { mc: number; fr: number; fin: number; frFin: number }> = {};
     for (const r of briefs ?? []) if (r.topic && (course === "bc" || !TOPICS[r.topic]?.bcOnly)) {
-      const t = (m[r.topic] ??= { mc: 0, fr: 0, fin: 0 }); t[r.kind]++; if (done[r.id]) t.fin++;
+      const t = (m[r.topic] ??= { mc: 0, fr: 0, fin: 0, frFin: 0 }); t[r.kind]++; if (done[r.id]) { t.fin++; if (r.kind === "fr") t.frFin++; }
     }
     return m;
   }, [briefs, done, course]);
@@ -109,7 +109,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
     for (const r of briefs ?? []) for (const p of r.papers ?? []) if (p.startsWith(course + "-")) { const e = (m[p] ??= { mc: 0, fr: 0, fin: 0 }); e[r.kind]++; if (done[r.id]) e.fin++; }
     return Object.entries(m).sort((x, y) => +y[0].slice(3) - +x[0].slice(3));
   }, [briefs, done, course]);
-  const selCount = useMemo(() => [...sel].reduce((n, t) => n + (stats[t] ? stats[t].mc + stats[t].fr : 0), 0), [sel, stats]);
+  const selCount = useMemo(() => [...sel].reduce((n, t) => n + (stats[t] ? (tab === "fr" ? stats[t].fr : stats[t].mc + stats[t].fr) : 0), 0), [sel, stats, tab]);
   const shown = useMemo(() => (rows ?? []).filter((r) => kind === "all" || r.kind === kind), [rows, kind]);
   const q = shown[idx];
   const chosen = q ? picks[q.id] : undefined;
@@ -119,7 +119,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   const go = (n: number) => setIdx(Math.max(0, Math.min(shown.length - 1, n)));
   const choose = (r: Row, L: string) => { setPicks((p) => ({ ...p, [r.id]: L })); mark(r.id, r.answer ? (L === r.answer ? "c" : "w") : 1); };
   const cross = (id: string, L: string) => setCrossed((c) => { const cur = c[id] ?? []; return { ...c, [id]: cur.includes(L) ? cur.filter((x) => x !== L) : [...cur, L] }; });
-  const open = (s: Source) => { setSrc(s); setRows(null); setIdx(0); setKind("all"); loadRows(s).then(setRows).catch((e: Error) => setError(e.message)); };
+  const open = (s: Source) => { setSrc(s); setRows(null); setIdx(0); setKind(s.only ?? "all"); loadRows(s).then(setRows).catch((e: Error) => setError(e.message)); };
   const toggle = (codes: string[], on: boolean) => setSel((cur) => { const n = new Set(cur); for (const c of codes) { if (on) n.add(c); else n.delete(c); } return n; });
   const onMove = (e: React.PointerEvent) => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId) || !splitRef.current) return;
@@ -158,16 +158,17 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
         {(["ab", "bc"] as const).map((c) => <button key={c} onClick={() => onCourse(c)} className={`text-sm px-2 py-1 rounded font-medium ${c === course ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-blue-100"}`}>{c.toUpperCase()}</button>)}
       </div>
       <div className="flex gap-2 mt-4 border-b border-gray-200">
-        {([["topics", "Practice by topic"], ["papers", "Mock exams"]] as const).map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} className={`text-sm font-semibold px-3 py-2 -mb-px border-b-2 ${tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>{label}</button>
+        {([["topics", "Practice by topic"], ["fr", "Free response by topic"], ["papers", "Mock exams"]] as const).map(([t, label]) => (
+          <button key={t} onClick={() => { setTab(t); setSel(new Set()); }} className={`text-sm font-semibold px-3 py-2 -mb-px border-b-2 ${tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>{label}</button>
         ))}
       </div>
-      {tab === "topics" ? (
+      {tab !== "papers" ? (
         <>
-          <p className="text-gray-600 mt-3 text-sm">Tick the topics you want to practice together.{course === "bc" && " Topics marked BC only are not on the AB exam."}</p>
+          <p className="text-gray-600 mt-3 text-sm">{tab === "fr" ? "Tick the topics whose free-response questions you want to practice together." : "Tick the topics you want to practice together."}{course === "bc" && " Topics marked BC only are not on the AB exam."}</p>
           <div className="mt-4 space-y-4 text-sm">
             {unitsOf(course).map(([u, name]) => {
-              const codes = topicsOfUnit(u, course).filter((t) => stats[t]);
+              const codes = topicsOfUnit(u, course).filter((t) => stats[t] && (tab !== "fr" || stats[t].fr > 0));
+              if (codes.length === 0) return null;
               const all = codes.length > 0 && codes.every((t) => sel.has(t));
               return (
                 <div key={u} className="rounded-lg bg-gray-50 p-3">
@@ -182,7 +183,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
                         <span className="flex-1">
                           {t} {TOPICS[t].name}{TOPICS[t].bcOnly && <span className="ml-2 text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5">BC only</span>}
                         </span>
-                        <span className="text-gray-500 text-xs whitespace-nowrap pt-0.5">{stats[t].mc} MC · {stats[t].fr} FR · {stats[t].fin} done</span>
+                        <span className="text-gray-500 text-xs whitespace-nowrap pt-0.5">{tab === "fr" ? `${stats[t].fr} FR · ${stats[t].frFin} done` : `${stats[t].mc} MC · ${stats[t].fr} FR · ${stats[t].fin} done`}</span>
                       </label>
                     ))}
                   </div>
@@ -191,8 +192,8 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
             })}
           </div>
           <div className="sticky bottom-0 bg-white pt-4 mt-2 flex gap-3">
-            <button disabled={selCount === 0} onClick={() => open({ title: `${sel.size} topic${sel.size > 1 ? "s" : ""}`, label: "TOPIC PRACTICE", topics: [...sel] })}
-              className="flex-1 rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700 disabled:opacity-40">{selCount === 0 ? "Select topics to start" : `Start practice · ${selCount} questions`}</button>
+            <button disabled={selCount === 0} onClick={() => open({ title: `${sel.size} topic${sel.size > 1 ? "s" : ""}`, label: "TOPIC PRACTICE", topics: [...sel], only: tab === "fr" ? "fr" : undefined })}
+              className="flex-1 rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700 disabled:opacity-40">{selCount === 0 ? "Select topics to start" : `Start practice · ${selCount} ${tab === "fr" ? "free-response questions" : "questions"}`}</button>
             {sel.size > 0 && <button onClick={() => setSel(new Set())} className="text-sm text-gray-500 underline">Clear</button>}
           </div>
         </>
