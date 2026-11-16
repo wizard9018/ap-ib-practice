@@ -30,15 +30,24 @@ const stripLabel = (t: string) => t.replace(/^\(?[A-E][).]\s*/, "");
 
 // the lists need only counts; full rows are fetched when a practice set is opened
 async function loadBriefs(): Promise<Brief[]> {
-  const { data, error } = await supabase.from("ap_practice").select("id,topic,kind,papers").range(0, 4999);
-  if (error || !data) throw new Error("Could not load AP Calculus questions.");
-  return data as Brief[];
+  // the API returns at most 1000 rows per request, so read the table page by page
+  const all: Brief[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from("ap_practice").select("id,topic,kind,papers").order("id").range(from, from + 999);
+    if (error || !data) throw new Error("Could not load AP Calculus questions.");
+    all.push(...(data as Brief[]));
+    if (data.length < 1000) return all;
+  }
 }
 async function loadRows(src: Source): Promise<Row[]> {
-  const q = supabase.from("ap_practice").select("id,topic,kind,papers,paper_numbers,year,number,prompt,choices,parts,answer,rubric,figures");
-  const { data, error } = await (src.paper ? q.contains("papers", [src.paper]) : q.in("topic", src.topics ?? [])).range(0, 4999);
-  if (error || !data) throw new Error("Could not load these questions.");
-  const rows = data as Row[];
+  const rows: Row[] = [];
+  for (let from = 0; ; from += 1000) {  // at most 1000 rows per request
+    const q = supabase.from("ap_practice").select("id,topic,kind,papers,paper_numbers,year,number,prompt,choices,parts,answer,rubric,figures");
+    const { data, error } = await (src.paper ? q.contains("papers", [src.paper]) : q.in("topic", src.topics ?? [])).order("id").range(from, from + 999);
+    if (error || !data) throw new Error("Could not load these questions.");
+    rows.push(...(data as Row[]));
+    if (data.length < 1000) break;
+  }
   const p = src.paper;
   rows.sort(p ? (x, y) => (x.paper_numbers[p] ?? 0) - (y.paper_numbers[p] ?? 0)
     : (x, y) => TOPIC_ORDER.indexOf(x.topic ?? "") - TOPIC_ORDER.indexOf(y.topic ?? "") || (y.year ?? 0) - (x.year ?? 0) || x.id.localeCompare(y.id));
