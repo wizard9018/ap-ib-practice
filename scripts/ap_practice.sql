@@ -17,3 +17,9 @@ create index if not exists ap_practice_course_unit on public.ap_practice (course
 alter table public.ap_practice enable row level security;
 drop policy if exists "ap_practice read" on public.ap_practice;
 create policy "ap_practice read" on public.ap_practice for select using (true);
+
+-- topics: `topic` now holds the CED topic code (e.g. '5.4'); past-paper membership for the Mock exams tab
+alter table public.ap_practice add column if not exists papers text[] not null default '{}';
+alter table public.ap_practice add column if not exists paper_numbers jsonb not null default '{}'::jsonb;
+create index if not exists ap_practice_topic on public.ap_practice (topic);
+create index if not exists ap_practice_papers on public.ap_practice using gin (papers);

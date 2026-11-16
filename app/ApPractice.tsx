@@ -5,6 +5,7 @@ import { supabase } from "@/lib/browser";
 import type { Mark } from "@/lib/ib";
 import { Md, MdMath } from "./Md";
 import Navigator from "./Navigator";
+import { TOPICS } from "./apTopics";
 
 // College Board CED units of AP Calculus (BC adds 9 and 10)
 const UNITS: Record<number, string> = {
@@ -17,30 +18,38 @@ type Course = "ab" | "bc";
 const unitsOf = (c: Course) => Object.entries(UNITS).filter(([u]) => c === "bc" || +u <= 8);
 const KINDS = [["all", "All"], ["mc", "MC"], ["fr", "FR"]] as const;
 type Item = { label: string; text: string };
-type Brief = { id: string; unit: number; kind: "mc" | "fr" };
-type Row = Brief & { year: number | null; number: string; prompt: string; choices: Item[]; parts: Item[]; answer: string | null; rubric: string | null };
+type Brief = { id: string; topic: string | null; kind: "mc" | "fr"; papers: string[] };
+type Row = Brief & { year: number | null; number: string; prompt: string; choices: Item[]; parts: Item[]; answer: string | null; rubric: string | null; paper_numbers: Record<string, number> };
+type Source = { title: string; label: string; topics?: string[]; paper?: string };
+const TOPIC_ORDER = Object.keys(TOPICS);
+const topicsOfUnit = (u: string, c: Course) => TOPIC_ORDER.filter((t) => t.split(".")[0] === u && (c === "bc" || !TOPICS[t].bcOnly));
 type Done = Record<string, Mark>;
-const keyOf = (c: Course) => `ap-calc-${c}-done-v1`;
-const readDone = (c: Course): Done => { try { return JSON.parse(localStorage.getItem(keyOf(c)) ?? "{}"); } catch { return {}; } };
+const KEY = "ap-calc-done-v2";
+const readDone = (): Done => { try { return JSON.parse(localStorage.getItem(KEY) ?? localStorage.getItem("ap-calc-ab-done-v1") ?? "{}"); } catch { return {}; } };
 const stripLabel = (t: string) => t.replace(/^\(?[A-E][).]\s*/, "");
 
-// the unit list needs only the counts; a unit's full rows are fetched when it is opened
-async function loadBriefs(course: Course): Promise<Brief[]> {
-  const { data, error } = await supabase.from("ap_practice").select("id,unit,kind").eq("course", course).range(0, 4999);
+// the lists need only counts; full rows are fetched when a practice set is opened
+async function loadBriefs(): Promise<Brief[]> {
+  const { data, error } = await supabase.from("ap_practice").select("id,topic,kind,papers").range(0, 4999);
   if (error || !data) throw new Error("Could not load AP Calculus questions.");
   return data as Brief[];
 }
-async function loadUnit(course: Course, unit: number): Promise<Row[]> {
-  const { data, error } = await supabase.from("ap_practice").select("id,unit,kind,year,number,prompt,choices,parts,answer,rubric").eq("course", course).eq("unit", unit).order("year", { ascending: false }).order("id");
-  if (error || !data) throw new Error("Could not load this unit.");
-  return data as Row[];
+async function loadRows(src: Source): Promise<Row[]> {
+  const q = supabase.from("ap_practice").select("id,topic,kind,papers,paper_numbers,year,number,prompt,choices,parts,answer,rubric");
+  const { data, error } = await (src.paper ? q.contains("papers", [src.paper]) : q.in("topic", src.topics ?? [])).range(0, 4999);
+  if (error || !data) throw new Error("Could not load these questions.");
+  const rows = data as Row[];
+  const p = src.paper;
+  rows.sort(p ? (x, y) => (x.paper_numbers[p] ?? 0) - (y.paper_numbers[p] ?? 0)
+    : (x, y) => TOPIC_ORDER.indexOf(x.topic ?? "") - TOPIC_ORDER.indexOf(y.topic ?? "") || (y.year ?? 0) - (x.year ?? 0) || x.id.localeCompare(y.id));
+  return rows;
 }
 
 // the passage side only changes with the question, not while the divider is dragged
 const Prompt = memo(function Prompt({ q }: { q: Row }) {
   return (
     <div className="p-6 max-w-none exam-serif">
-      <p className="text-xs text-gray-400 mb-2">{q.kind === "mc" ? "Multiple choice" : "Free response"}{q.year ? ` · ${q.year}` : ""}{q.number ? ` · Question ${q.number}` : ""}</p>
+      <p className="text-xs text-gray-400 mb-2">{q.kind === "mc" ? "Multiple choice" : "Free response"}{q.year ? ` · ${q.year}` : ""}{q.number ? ` · Question ${q.number}` : ""}{q.topic && TOPICS[q.topic] ? ` · ${q.topic} ${TOPICS[q.topic].name}` : ""}</p>
       <Md>{q.prompt}</Md>
       {q.kind === "fr" && q.parts.map((p) => <div key={p.label} className="mt-2"><strong>({p.label})</strong> <Md>{p.text}</Md></div>)}
     </div>
@@ -56,8 +65,10 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   const COURSE = course.toUpperCase();
   const [briefs, setBriefs] = useState<Brief[] | null>(null);
   const [error, setError] = useState("");
-  const [unit, setUnit] = useState<number | null>(null);
-  const [unitRows, setUnitRows] = useState<Row[] | null>(null);
+  const [tab, setTab] = useState<"topics" | "papers">("topics");
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [src, setSrc] = useState<Source | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
   const [kind, setKind] = useState<"all" | "mc" | "fr">("all");
   const [idx, setIdx] = useState(0);
   const [done, setDone] = useState<Done>({});
@@ -71,17 +82,25 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   const [split, setSplit] = useState(50);
   const splitRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setDone(readDone(course)); setDoneLoaded(true); loadBriefs(course).then(setBriefs).catch((e: Error) => setError(e.message)); }, [course]);
+  useEffect(() => { setDone(readDone()); setDoneLoaded(true); loadBriefs().then(setBriefs).catch((e: Error) => setError(e.message)); }, []);
   // one write per committed change (not inside the state updater)
-  useEffect(() => { if (doneLoaded) try { localStorage.setItem(keyOf(course), JSON.stringify(done)); } catch { /* private mode: progress just isn't kept */ } }, [done, doneLoaded, course]);
+  useEffect(() => { if (doneLoaded) try { localStorage.setItem(KEY, JSON.stringify(done)); } catch { /* private mode: progress just isn't kept */ } }, [done, doneLoaded]);
 
+  // per-topic counts (BC-only topics are hidden from AB) and the list of past papers of this course
   const stats = useMemo(() => {
-    const m: Record<number, { mc: number; fr: number; fin: number }> = {};
-    for (const [u] of unitsOf(course)) m[+u] = { mc: 0, fr: 0, fin: 0 };
-    for (const r of briefs ?? []) if (m[r.unit]) { m[r.unit][r.kind]++; if (done[r.id]) m[r.unit].fin++; }
+    const m: Record<string, { mc: number; fr: number; fin: number }> = {};
+    for (const r of briefs ?? []) if (r.topic && (course === "bc" || !TOPICS[r.topic]?.bcOnly)) {
+      const t = (m[r.topic] ??= { mc: 0, fr: 0, fin: 0 }); t[r.kind]++; if (done[r.id]) t.fin++;
+    }
     return m;
-  }, [briefs, done]);
-  const shown = useMemo(() => (unitRows ?? []).filter((r) => kind === "all" || r.kind === kind), [unitRows, kind]);
+  }, [briefs, done, course]);
+  const papers = useMemo(() => {
+    const m: Record<string, { n: number; fin: number }> = {};
+    for (const r of briefs ?? []) for (const p of r.papers ?? []) if (p.startsWith(course + "-")) { const e = (m[p] ??= { n: 0, fin: 0 }); e.n++; if (done[r.id]) e.fin++; }
+    return Object.entries(m).sort((x, y) => +y[0].slice(3) - +x[0].slice(3));
+  }, [briefs, done, course]);
+  const selCount = useMemo(() => [...sel].reduce((n, t) => n + (stats[t] ? stats[t].mc + stats[t].fr : 0), 0), [sel, stats]);
+  const shown = useMemo(() => (rows ?? []).filter((r) => kind === "all" || r.kind === kind), [rows, kind]);
   const q = shown[idx];
   const chosen = q ? picks[q.id] : undefined;
 
@@ -90,7 +109,8 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   const go = (n: number) => setIdx(Math.max(0, Math.min(shown.length - 1, n)));
   const choose = (r: Row, L: string) => { setPicks((p) => ({ ...p, [r.id]: L })); mark(r.id, r.answer ? (L === r.answer ? "c" : "w") : 1); };
   const cross = (id: string, L: string) => setCrossed((c) => { const cur = c[id] ?? []; return { ...c, [id]: cur.includes(L) ? cur.filter((x) => x !== L) : [...cur, L] }; });
-  const open = (u: number) => { setUnit(u); setUnitRows(null); setIdx(0); setKind("all"); loadUnit(course, u).then(setUnitRows).catch((e: Error) => setError(e.message)); };
+  const open = (s: Source) => { setSrc(s); setRows(null); setIdx(0); setKind("all"); loadRows(s).then(setRows).catch((e: Error) => setError(e.message)); };
+  const toggle = (codes: string[], on: boolean) => setSel((cur) => { const n = new Set(cur); for (const c of codes) { if (on) n.add(c); else n.delete(c); } return n; });
   const onMove = (e: React.PointerEvent) => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId) || !splitRef.current) return;
     const r = splitRef.current.getBoundingClientRect();
@@ -100,7 +120,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   // keyboard like the exam: A-E choose, arrows move (listener bound once, reads the latest state from a ref)
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (unit === null || !q || (e.target instanceof HTMLElement && e.target.closest("input,textarea"))) return;
+    if (src === null || !q || (e.target instanceof HTMLElement && e.target.closest("input,textarea"))) return;
     const L = e.key.toUpperCase();
     if (e.key === "ArrowRight") go(idx + 1); else if (e.key === "ArrowLeft") go(idx - 1);
     else if (q.kind === "mc" && !chosen && q.choices.some((c) => c.label === L)) choose(q, L);
@@ -116,8 +136,8 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   if (error) return shell(<p className="text-red-600">{error}</p>);
   if (!briefs) return <main className="flex-1 flex items-center justify-center text-gray-400 text-sm">Loading…</main>;
 
-  // ---- unit list (same card style as the exam start page)
-  if (unit === null) return shell(
+  // ---- start page: practice by topic / mock exams (same card style as the exam start page)
+  if (src === null) return shell(
     <>
       <div className="flex items-center justify-between text-xs">
         <span className="font-semibold tracking-wide text-blue-700">AP Practice</span>
@@ -127,16 +147,59 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
         <h1 className="text-2xl font-bold">AP Calculus {COURSE}</h1>
         {(["ab", "bc"] as const).map((c) => <button key={c} onClick={() => onCourse(c)} className={`text-sm px-2 py-1 rounded font-medium ${c === course ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-blue-100"}`}>{c.toUpperCase()}</button>)}
       </div>
-      <p className="text-gray-600 mt-1">Practice by College Board unit</p>
-      <div className="mt-6 space-y-3 text-sm">
-        {unitsOf(course).map(([u, name]) => (
-          <button key={u} onClick={() => open(+u)} className="w-full text-left rounded-lg bg-gray-50 p-3 hover:bg-blue-50">
-            <div className="font-semibold">Unit {u}: {name}</div>
-            <div className="text-gray-500">{stats[+u].mc} multiple choice · {stats[+u].fr} free response · {stats[+u].fin} done</div>
-          </button>
+      <div className="flex gap-2 mt-4 border-b border-gray-200">
+        {([["topics", "Practice by topic"], ["papers", "Mock exams"]] as const).map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)} className={`text-sm font-semibold px-3 py-2 -mb-px border-b-2 ${tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>{label}</button>
         ))}
       </div>
-      {course === "ab" && <button onClick={onExam} className="mt-6 w-full rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700">Take the timed 2008 mock exam</button>}
+      {tab === "topics" ? (
+        <>
+          <p className="text-gray-600 mt-3 text-sm">Tick the topics you want to practice together.{course === "bc" && " Topics marked BC only are not on the AB exam."}</p>
+          <div className="mt-4 space-y-4 text-sm">
+            {unitsOf(course).map(([u, name]) => {
+              const codes = topicsOfUnit(u, course).filter((t) => stats[t]);
+              const all = codes.length > 0 && codes.every((t) => sel.has(t));
+              return (
+                <div key={u} className="rounded-lg bg-gray-50 p-3">
+                  <label className="flex items-center gap-2 font-semibold cursor-pointer">
+                    <input type="checkbox" checked={all} onChange={(e) => toggle(codes, e.target.checked)} />
+                    Unit {u}: {name}
+                  </label>
+                  <div className="mt-2 space-y-1 pl-6">
+                    {codes.map((t) => (
+                      <label key={t} className="flex items-start gap-2 cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5">
+                        <input type="checkbox" className="mt-1" checked={sel.has(t)} onChange={(e) => toggle([t], e.target.checked)} />
+                        <span className="flex-1">
+                          {t} {TOPICS[t].name}{TOPICS[t].bcOnly && <span className="ml-2 text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5">BC only</span>}
+                        </span>
+                        <span className="text-gray-500 text-xs whitespace-nowrap pt-0.5">{stats[t].mc} MC · {stats[t].fr} FR · {stats[t].fin} done</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="sticky bottom-0 bg-white pt-4 mt-2 flex gap-3">
+            <button disabled={selCount === 0} onClick={() => open({ title: `${sel.size} topic${sel.size > 1 ? "s" : ""}`, label: "TOPIC PRACTICE", topics: [...sel] })}
+              className="flex-1 rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700 disabled:opacity-40">{selCount === 0 ? "Select topics to start" : `Start practice · ${selCount} questions`}</button>
+            {sel.size > 0 && <button onClick={() => setSel(new Set())} className="text-sm text-gray-500 underline">Clear</button>}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-gray-600 mt-3 text-sm">The multiple-choice questions of each past paper, together in exam order.</p>
+          <div className="mt-4 space-y-2 text-sm">
+            {papers.map(([p, e]) => (
+              <button key={p} onClick={() => open({ title: `${p.slice(3)} ${COURSE} exam`, label: "MOCK EXAM", paper: p })} className="w-full text-left rounded-lg bg-gray-50 p-3 hover:bg-blue-50">
+                <div className="font-semibold">{p.slice(3)} AP Calculus {COURSE}</div>
+                <div className="text-gray-500">{e.n} multiple choice · {e.fin} done</div>
+              </button>
+            ))}
+          </div>
+          {course === "ab" && <button onClick={onExam} className="mt-6 w-full rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700">Take the timed 2008 mock exam</button>}
+        </>
+      )}
     </>,
   );
 
@@ -150,18 +213,18 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   return (
     <div className="flex flex-col h-screen">
       <header className="flex items-center justify-between bg-blue-50 border-b border-blue-100 px-4 py-2">
-        <div className="text-sm font-medium text-gray-800">AP Calculus {COURSE} · Unit {unit}: {UNITS[unit]}</div>
+        <div className="text-sm font-medium text-gray-800">AP Calculus {COURSE} · {src.title}</div>
         <div className="flex items-center gap-2">
           {KINDS.map(([k, label]) => (
             <button key={k} onClick={() => { setKind(k); setIdx(0); }} className={`text-sm px-2 py-1 rounded font-medium ${kind === k ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-blue-100"}`}>{label}</button>
           ))}
-          <button onClick={() => setUnit(null)} className="text-sm px-2 py-1 rounded font-medium text-gray-600 hover:bg-blue-100">All units</button>
+          <button onClick={() => setSrc(null)} className="text-sm px-2 py-1 rounded font-medium text-gray-600 hover:bg-blue-100">Back to list</button>
         </div>
       </header>
-      <div className="bg-blue-900 text-white text-center text-xs font-semibold tracking-wide py-1">UNIT PRACTICE</div>
+      <div className="bg-blue-900 text-white text-center text-xs font-semibold tracking-wide py-1">{src.label}</div>
 
       <main className="flex-1 min-h-0 overflow-y-auto">
-        {!unitRows ? <p className="p-6 text-gray-400">Loading…</p> : !q ? <p className="p-6 text-gray-400">No questions here yet.</p> : (
+        {!rows ? <p className="p-6 text-gray-400">Loading…</p> : !q ? <p className="p-6 text-gray-400">No questions here yet.</p> : (
           <div ref={splitRef} className="h-full flex">
             <div style={{ width: `${split}%` }} className="overflow-y-auto shrink-0"><Prompt q={q} /></div>
             <div onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)} onPointerMove={onMove}
