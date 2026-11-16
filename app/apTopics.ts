@@ -38,7 +38,7 @@ export const TOPICS: Record<string, { name: string; bcOnly: boolean }> = {
   "4.4": { name: "Introduction to Related Rates", bcOnly: false },
   "4.5": { name: "Solving Related Rates Problems", bcOnly: false },
   "4.6": { name: "Local Linearity and Linearization", bcOnly: false },
-  "4.7": { name: "L'Hospital's Rule for Indeterminate Forms", bcOnly: true },
+  "4.7": { name: "L'Hospital's Rule for Indeterminate Forms", bcOnly: false },
   "5.1": { name: "Using the Mean Value Theorem", bcOnly: false },
   "5.2": { name: "Extreme Value Theorem, Global vs. Local Extrema, and Critical Points", bcOnly: false },
   "5.3": { name: "Intervals on Which a Function Is Increasing or Decreasing", bcOnly: false },
