@@ -20,7 +20,7 @@ const unitsOf = (c: Course) => Object.entries(UNITS).filter(([u]) => c === "bc" 
 const KINDS = [["all", "All"], ["mc", "MC"], ["fr", "FR"]] as const;
 type Item = { label: string; text: string };
 type Brief = { id: string; topic: string | null; kind: "mc" | "fr"; papers: string[] };
-type Row = Brief & { year: number | null; number: string; prompt: string; choices: Item[]; parts: Item[]; answer: string | null; rubric: string | null; paper_numbers: Record<string, number>; figures: { p: string[]; c: Record<string, string> } | null };
+type Row = Brief & { year: number | null; number: string; prompt: string; choices: Item[]; parts: Item[]; answer: string | null; rubric: string | null; paper_numbers: Record<string, number>; figures: { p: string[]; c: Record<string, string> } | null; variant?: boolean };
 type Source = { title: string; label: string; topics?: string[]; paper?: string; only?: "fr" };
 const TOPIC_ORDER = Object.keys(TOPICS);
 const topicsOfUnit = (u: string, c: Course) => TOPIC_ORDER.filter((t) => t.split(".")[0] === u && (c === "bc" || !TOPICS[t].bcOnly));
@@ -62,7 +62,7 @@ async function loadRows(src: Source): Promise<Row[]> {
 const Prompt = memo(function Prompt({ q }: { q: Row }) {
   return (
     <div className="p-6 max-w-none exam-serif">
-      <p className="text-xs text-gray-400 mb-2">{q.kind === "mc" ? "Multiple choice" : "Free response"}{q.year ? ` · ${q.year}` : ""}{q.number ? ` · Question ${q.number}` : ""}{q.topic && TOPICS[q.topic] ? ` · ${q.topic} ${TOPICS[q.topic].name}` : ""}</p>
+      <p className="text-xs text-gray-400 mb-2">{q.variant ? "Redo · new numbers · " : ""}{q.kind === "mc" ? "Multiple choice" : "Free response"}{q.year ? ` · ${q.year}` : ""}{q.number ? ` · Question ${q.number}` : ""}{q.topic && TOPICS[q.topic] ? ` · ${q.topic} ${TOPICS[q.topic].name}` : ""}</p>
       <Md>{q.prompt}</Md>
       {q.figures?.p.map((u) => <img key={u} src={u} alt="" className="my-3 max-w-full h-auto" />)}
       {q.kind === "fr" && q.parts.map((p) => <div key={p.label} className="mt-2"><strong>({p.label})</strong> <Md>{p.text}</Md></div>)}
@@ -151,7 +151,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   }, [briefs, done, course]);
   const selCount = useMemo(() => [...sel].reduce((n, t) => n + (stats[t] ? (tab === "fr" ? stats[t].fr : stats[t].mc + stats[t].fr) : 0), 0), [sel, stats, tab]);
   const shown = useMemo(() => kind === "redo"
-    ? (rows ?? []).filter((r) => redoIds.includes(r.id)).map((r) => { const v = variants[r.id]; return v ? { ...r, prompt: v.prompt, choices: v.choices, answer: v.answer, figures: v.figures } : r; })
+    ? (rows ?? []).filter((r) => redoIds.includes(r.id)).map((r) => { const v = variants[r.id]; return v ? { ...r, prompt: v.prompt, choices: v.choices, answer: v.answer, figures: v.figures, variant: true } : r; })
     : (rows ?? []).filter((r) => kind === "all" || r.kind === kind), [rows, kind, redoIds, variants]);
   const q = shown[idx];
   const chosen = q ? (kind === "redo" ? rpicks[q.id] : picks[q.id]) : undefined;
@@ -167,6 +167,8 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
     setRedoIds(ids); setRpicks({}); setKind("redo"); setIdx(0);
     void supabase.from("ap_variants").select("base_id,prompt,choices,answer,figures").in("base_id", ids).then(({ data }) => { const m: Record<string, Variant> = {}; for (const v of (data ?? []) as Variant[]) m[v.base_id] = v; setVariants(m); });
   };
+  // a free-response question without a scoring guideline has nothing to open: seeing it counts as done
+  useEffect(() => { if (q && q.kind === "fr" && !q.rubric && !done[q.id]) mark(q.id, 1); });
   const go = (n: number) => setIdx(Math.max(0, Math.min(shown.length - 1, n)));
   const choose = (r: Row, L: string) => {
     if (kind === "redo") { setRpicks((p) => ({ ...p, [r.id]: L })); if (L === r.answer) setRedo((c) => ({ ...c, [r.id]: true })); return; }
