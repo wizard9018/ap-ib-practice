@@ -25,6 +25,9 @@ type Source = { title: string; label: string; topics?: string[]; paper?: string;
 const TOPIC_ORDER = Object.keys(TOPICS);
 const topicsOfUnit = (u: string, c: Course) => TOPIC_ORDER.filter((t) => t.split(".")[0] === u && (c === "bc" || !TOPICS[t].bcOnly));
 type Done = Record<string, Mark>;
+type Variant = { base_id: string; prompt: string; choices: Item[]; answer: string; figures: Row["figures"] };
+const REDO_KEY = "ap-calc-redo-v1";
+const readRedo = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(REDO_KEY) ?? "{}"); } catch { return {}; } };
 const KEY = "ap-calc-done-v2";
 const readDone = (): Done => { try { return JSON.parse(localStorage.getItem(KEY) ?? localStorage.getItem("ap-calc-ab-done-v1") ?? "{}"); } catch { return {}; } };
 const stripLabel = (t: string) => t.replace(/^\(?[A-E][).]\s*/, "");
@@ -80,10 +83,17 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [src, setSrc] = useState<Source | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [kind, setKind] = useState<"all" | "mc" | "fr">("all");
+  const [kind, setKind] = useState<"all" | "mc" | "fr" | "redo">("all");
   const [idx, setIdx] = useState(0);
   const [done, setDone] = useState<Done>({});
   const [doneLoaded, setDoneLoaded] = useState(false);
+  const [redo, setRedo] = useState<Record<string, boolean>>({});     // wrong question -> redone correctly
+  const [redoIds, setRedoIds] = useState<string[]>([]);              // the wrong questions of the redo round that is open
+  const [variants, setVariants] = useState<Record<string, Variant>>({});
+  const [rpicks, setRpicks] = useState<Record<string, string>>({});
+  const [uid, setUid] = useState<string | null>(null);
+  const [synced, setSynced] = useState(false);
+  const known = useRef<Record<string, string>>({});                  // question id -> "mark|redo" as last seen on the server
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [marked, setMarked] = useState<Record<string, boolean>>({});
   const [crossed, setCrossed] = useState<Record<string, string[]>>({});
@@ -93,9 +103,38 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   const [split, setSplit] = useState(50);
   const splitRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setDone(readDone()); setDoneLoaded(true); loadBriefs().then(setBriefs).catch((e: Error) => setError(e.message)); }, []);
+  useEffect(() => { setDone(readDone()); setRedo(readRedo()); setDoneLoaded(true); loadBriefs().then(setBriefs).catch((e: Error) => setError(e.message)); }, []);
   // one write per committed change (not inside the state updater)
-  useEffect(() => { if (doneLoaded) try { localStorage.setItem(KEY, JSON.stringify(done)); } catch { /* private mode: progress just isn't kept */ } }, [done, doneLoaded]);
+  useEffect(() => { if (doneLoaded) try { localStorage.setItem(KEY, JSON.stringify(done)); localStorage.setItem(REDO_KEY, JSON.stringify(redo)); } catch { /* private mode: progress just isn't kept */ } }, [done, redo, doneLoaded]);
+  // signed in: pull the saved progress once, then push every change (the table is optional: without it progress stays in this browser)
+  useEffect(() => {
+    if (!doneLoaded) return;
+    void (async () => {
+      const id = (await supabase.auth.getSession()).data.session?.user.id ?? null; setUid(id);
+      if (!id) { setSynced(true); return; }
+      const d: Done = {}, r: Record<string, boolean> = {};
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from("ap_progress").select("question_id,mark,redo").order("question_id").range(from, from + 999);
+        if (error || !data) { setSynced(true); setUid(null); return; }
+        for (const x of data) { if (x.mark) d[x.question_id] = x.mark === "1" ? 1 : (x.mark as Mark); if (x.redo) r[x.question_id] = true; known.current[x.question_id] = `${x.mark ?? ""}|${x.redo ? 1 : 0}`; }
+        if (data.length < 1000) break;
+      }
+      setDone((cur) => ({ ...cur, ...d })); setRedo((cur) => ({ ...cur, ...r })); setSynced(true);
+    })();
+  }, [doneLoaded]);
+  useEffect(() => {
+    if (!uid || !synced) return;
+    const t = setTimeout(() => void (async () => {
+      const out = [...new Set([...Object.keys(done), ...Object.keys(redo)])].filter((id) => known.current[id] !== `${done[id] ?? ""}|${redo[id] ? 1 : 0}`)
+        .map((id) => ({ user_id: uid, question_id: id, mark: done[id] == null ? null : String(done[id]), redo: !!redo[id], updated_at: new Date().toISOString() }));
+      for (let i = 0; i < out.length; i += 500) {
+        const part = out.slice(i, i + 500);
+        const { error } = await supabase.from("ap_progress").upsert(part); if (error) return;
+        for (const x of part) known.current[x.question_id] = `${x.mark ?? ""}|${x.redo ? 1 : 0}`;
+      }
+    })(), 800);
+    return () => clearTimeout(t);
+  }, [done, redo, uid, synced]);
 
   // per-topic counts (BC-only topics are hidden from AB) and the list of past papers of this course
   const stats = useMemo(() => {
@@ -111,14 +150,27 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
     return Object.entries(m).sort((x, y) => +y[0].slice(3) - +x[0].slice(3));
   }, [briefs, done, course]);
   const selCount = useMemo(() => [...sel].reduce((n, t) => n + (stats[t] ? (tab === "fr" ? stats[t].fr : stats[t].mc + stats[t].fr) : 0), 0), [sel, stats, tab]);
-  const shown = useMemo(() => (rows ?? []).filter((r) => kind === "all" || r.kind === kind), [rows, kind]);
+  const shown = useMemo(() => kind === "redo"
+    ? (rows ?? []).filter((r) => redoIds.includes(r.id)).map((r) => { const v = variants[r.id]; return v ? { ...r, prompt: v.prompt, choices: v.choices, answer: v.answer, figures: v.figures } : r; })
+    : (rows ?? []).filter((r) => kind === "all" || r.kind === kind), [rows, kind, redoIds, variants]);
   const q = shown[idx];
-  const chosen = q ? picks[q.id] : undefined;
+  const chosen = q ? (kind === "redo" ? rpicks[q.id] : picks[q.id]) : undefined;
 
   // a result (c/w) is never downgraded to "answer seen"
   const mark = (id: string, m: Mark) => setDone((cur) => (m === 1 && (cur[id] === "c" || cur[id] === "w") ? cur : { ...cur, [id]: m }));
+  // a topic is complete when all its questions are done and every question answered wrongly was redone correctly
+  const complete = (cs: string[], only?: "fr") => { const rs = (briefs ?? []).filter((r) => r.topic && cs.includes(r.topic) && (!only || r.kind === only)); return rs.length > 0 && rs.every((r) => done[r.id] && (done[r.id] !== "w" || redo[r.id])); };
+  const wrongLeft = (rows ?? []).filter((r) => done[r.id] === "w" && !redo[r.id]);
+  const allDone = !!rows && rows.length > 0 && rows.every((r) => done[r.id]);
+  const startRedo = () => {
+    const ids = wrongLeft.map((r) => r.id); if (!ids.length) return;
+    setRedoIds(ids); setRpicks({}); setKind("redo"); setIdx(0);
+    void supabase.from("ap_variants").select("base_id,prompt,choices,answer,figures").in("base_id", ids).then(({ data }) => { const m: Record<string, Variant> = {}; for (const v of (data ?? []) as Variant[]) m[v.base_id] = v; setVariants(m); });
+  };
   const go = (n: number) => setIdx(Math.max(0, Math.min(shown.length - 1, n)));
-  const choose = (r: Row, L: string) => { setPicks((p) => ({ ...p, [r.id]: L })); mark(r.id, r.answer ? (L === r.answer ? "c" : "w") : 1); };
+  const choose = (r: Row, L: string) => {
+    if (kind === "redo") { setRpicks((p) => ({ ...p, [r.id]: L })); if (L === r.answer) setRedo((c) => ({ ...c, [r.id]: true })); return; }
+    setPicks((p) => ({ ...p, [r.id]: L })); mark(r.id, r.answer ? (L === r.answer ? "c" : "w") : 1); };
   const cross = (id: string, L: string) => setCrossed((c) => { const cur = c[id] ?? []; return { ...c, [id]: cur.includes(L) ? cur.filter((x) => x !== L) : [...cur, L] }; });
   const open = (s: Source) => { setSrc(s); setRows(null); setIdx(0); setKind(s.only ?? "all"); loadRows(s).then(setRows).catch((e: Error) => setError(e.message)); };
   const toggle = (codes: string[], on: boolean) => setSel((cur) => { const n = new Set(cur); for (const c of codes) { if (on) n.add(c); else n.delete(c); } return n; });
@@ -175,7 +227,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
                 <div key={u} className="rounded-lg bg-gray-50 p-3">
                   <label className="flex items-center gap-2 font-semibold cursor-pointer">
                     <input type="checkbox" checked={all} onChange={(e) => toggle(codes, e.target.checked)} />
-                    Unit {u}: {name}
+                    {complete(codes, tab === "fr" ? "fr" : undefined) && <span className="text-green-600" title="All done, wrong answers redone">✓</span>}Unit {u}: {name}
                   </label>
                   <div className="mt-2 space-y-1 pl-6">
                     {codes.flatMap((t) => {
@@ -187,7 +239,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
                         <label key={t} className="flex items-start gap-2 cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5">
                           <input type="checkbox" className="mt-1" checked={cs.every((c) => sel.has(c))} onChange={(e) => toggle(cs, e.target.checked)} />
                           <span className="flex-1">
-                            {m ? m.name : `${t} ${TOPICS[t].name}`}{cs.every((c) => TOPICS[c].bcOnly) && <span className="ml-2 text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5">BC only</span>}
+                            {complete(cs, tab === "fr" ? "fr" : undefined) && <span className="text-green-600 font-bold mr-1" title="All done, wrong answers redone">✓</span>}{m ? m.name : `${t} ${TOPICS[t].name}`}{cs.every((c) => TOPICS[c].bcOnly) && <span className="ml-2 text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5">BC only</span>}
                           </span>
                           <span className="text-gray-500 text-xs whitespace-nowrap pt-0.5">{tab === "fr" ? `${sum("fr")} FR · ${sum("frFin")} done` : `${sum("mc")} MC · ${sum("fr")} FR · ${sum("fin")} done`}</span>
                         </label>
@@ -223,6 +275,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
 
   const crossedHere = q ? crossed[q.id] ?? [] : [];
   const choiceClass = (label: string) => {
+    if (kind === "redo") return !chosen ? "border-gray-300 hover:border-blue-400" : label !== chosen ? "border-gray-300 opacity-60" : chosen === q.answer ? "border-green-600 bg-green-50" : "border-red-500 bg-red-50";
     if (!chosen || !q.answer) return chosen === label ? "border-blue-600 bg-blue-50" : "border-gray-300 hover:border-blue-400";
     if (label === q.answer) return "border-green-600 bg-green-50";
     return label === chosen ? "border-red-500 bg-red-50" : "border-gray-300 opacity-60";
@@ -236,6 +289,9 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
           {KINDS.map(([k, label]) => (
             <button key={k} onClick={() => { setKind(k); setIdx(0); }} className={`text-sm px-2 py-1 rounded font-medium ${kind === k ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-blue-100"}`}>{label}</button>
           ))}
+          {allDone && (wrongLeft.length > 0
+            ? <button onClick={startRedo} className={`text-sm px-2 py-1 rounded font-medium ${kind === "redo" ? "text-blue-600 bg-blue-100" : "text-red-600 hover:bg-blue-100"}`}>Redo wrong ({wrongLeft.length})</button>
+            : <span className="text-sm px-2 py-1 font-medium text-green-700">✓ Complete</span>)}
           <button onClick={() => setSrc(null)} className="text-sm px-2 py-1 rounded font-medium text-gray-600 hover:bg-blue-100">Back to list</button>
         </div>
       </header>
@@ -282,7 +338,10 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
                         </div>
                       );
                     })}
-                    {chosen && <p className={`text-sm font-semibold pt-2 ${!q.answer ? "text-gray-500" : chosen === q.answer ? "text-green-700" : "text-red-600"}`}>
+                    {kind === "redo" && chosen && (chosen === q.answer
+                      ? <p className="text-sm font-semibold pt-2 text-green-700">Correct. This question is cleared.</p>
+                      : <p className="text-sm font-semibold pt-2 text-red-600">Incorrect. <button onClick={() => setRpicks((p) => { const n = { ...p }; delete n[q.id]; return n; })} className="underline">Try again</button></p>)}
+                    {kind !== "redo" && chosen && <p className={`text-sm font-semibold pt-2 ${!q.answer ? "text-gray-500" : chosen === q.answer ? "text-green-700" : "text-red-600"}`}>
                       {!q.answer ? "No answer key for this question yet." : chosen === q.answer ? "Correct" : `Incorrect. The correct answer is ${q.answer}.`}</p>}
                   </div>
                 ) : !q.rubric ? <p className="text-sm text-gray-500">No scoring guideline for this question yet.</p>
@@ -299,7 +358,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
         {q && <button onClick={() => setShowNav(true)} className="text-sm font-semibold bg-black text-white rounded-full px-5 py-2 hover:bg-gray-800">Question {idx + 1} of {shown.length} ⌄</button>}
         <button onClick={() => go(idx + 1)} disabled={idx >= shown.length - 1} className="text-sm font-semibold bg-blue-600 text-white rounded-full px-6 py-2 hover:bg-blue-700 disabled:opacity-30">Next →</button>
       </footer>
-      {showNav && <Navigator items={shown.map((x, n) => ({ questionno: n + 1, answered: !!done[x.id], marked: !!marked[x.id] }))} currentIndex={idx} onJump={(n) => { go(n); close(); }} onClose={close} onReview={close} />}
+      {showNav && <Navigator items={shown.map((x, n) => ({ questionno: n + 1, answered: kind === "redo" ? !!redo[x.id] : !!done[x.id], marked: !!marked[x.id] }))} currentIndex={idx} onJump={(n) => { go(n); close(); }} onClose={close} onReview={close} />}
     </div>
   );
 }

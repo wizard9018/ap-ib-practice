@@ -26,3 +26,28 @@ create index if not exists ap_practice_papers on public.ap_practice using gin (p
 
 -- figures: {"p": [image urls shown under the question], "c": {"A": image url for that choice}}
 alter table public.ap_practice add column if not exists figures jsonb;
+
+-- per-user progress of the AP practice (done marks and wrong questions redone with changed numbers); each user reads and writes only their own rows
+create table if not exists public.ap_progress (
+  user_id uuid not null references auth.users on delete cascade,
+  question_id text not null,
+  mark text,                        -- '1' seen, 'c' correct, 'w' wrong, 'p' partial
+  redo boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, question_id)
+);
+alter table public.ap_progress enable row level security;
+drop policy if exists "ap_progress own" on public.ap_progress;
+create policy "ap_progress own" on public.ap_progress for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- number-changed versions of multiple-choice questions, shown when the original was answered wrongly (read-only for everyone; written with the service role key)
+create table if not exists public.ap_variants (
+  base_id text primary key references public.ap_practice(id) on delete cascade,
+  prompt text not null,
+  choices jsonb not null default '[]',
+  answer text not null,
+  figures jsonb
+);
+alter table public.ap_variants enable row level security;
+drop policy if exists "ap_variants read" on public.ap_variants;
+create policy "ap_variants read" on public.ap_variants for select using (true);
