@@ -68,6 +68,8 @@ const SSAT_EXAMS = [
   { id: "ssat-upper-princeton-1", title: "Princeton Review Practice Test 1", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
   { id: "ssat-upper-princeton-2", title: "Princeton Review Practice Test 2", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
   { id: "ssat-upper-princeton-3", title: "Princeton Review Practice Test 3", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
+  { id: "ssat-upper-petersons-2", title: "Peterson's Practice Test 2", note: "Verbal · Quantitative 1 · Reading · Quantitative 2" },
+  { id: "ssat-upper-petersons-3", title: "Peterson's Practice Test 3", note: "Verbal · Quantitative 1 · Reading · Quantitative 2" },
   { id: "ssat-upper-barrons-1", title: "Barron's Practice Test 1", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
   { id: "ssat-upper-barrons-2", title: "Barron's Practice Test 2", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
 ];

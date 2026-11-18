@@ -92,7 +92,7 @@ async function loadRows(src: Source): Promise<Row[]> {
   }
   const p = src.paper;
   rows.sort(p ? (x, y) => +(x.kind === "fr") - +(y.kind === "fr") || (x.paper_numbers[p] ?? 0) - (y.paper_numbers[p] ?? 0)
-    : (x, y) => TOPIC_ORDER.indexOf(x.topic ?? "") - TOPIC_ORDER.indexOf(y.topic ?? "") || (y.year ?? 0) - (x.year ?? 0) || x.id.localeCompare(y.id));
+    : (x, y) => +x.id.startsWith("book-") - +y.id.startsWith("book-") || TOPIC_ORDER.indexOf(x.topic ?? "") - TOPIC_ORDER.indexOf(y.topic ?? "") || (y.year ?? 0) - (x.year ?? 0) || x.id.localeCompare(y.id));
   return rows;
 }
 
@@ -100,7 +100,7 @@ async function loadRows(src: Source): Promise<Row[]> {
 const Prompt = memo(function Prompt({ q }: { q: Row }) {
   return (
     <div className="p-6 max-w-none exam-serif">
-      <p className="text-xs text-gray-400 mb-2">{q.variant ? "Redo · new numbers · " : ""}{q.kind === "mc" ? "Multiple choice" : "Free response"}{q.year ? ` · ${q.year}` : ""}{q.number ? ` · Question ${q.number}` : ""}{q.topic && TOPICS[q.topic] ? ` · ${q.topic} ${TOPICS[q.topic].name}` : ""}</p>
+      <p className="text-xs text-gray-400 mb-2">{q.variant ? "Redo · new numbers · " : ""}{q.year ? `${q.year} ` : ""}{q.kind === "mc" ? "Multiple choice" : "Free response"}{q.number ? ` · Question ${q.number}` : ""}{q.topic && TOPICS[q.topic] ? ` · ${q.topic} ${TOPICS[q.topic].name}` : ""}</p>
       <Md>{q.prompt}</Md>
       {q.figures?.p.map((u) => <img key={u} src={u} alt="" className="my-3 max-w-full h-auto" />)}
       {q.kind === "fr" && q.parts.map((p) => <div key={p.label} className="mt-2"><strong>({p.label})</strong> <Md>{p.text}</Md></div>)}
