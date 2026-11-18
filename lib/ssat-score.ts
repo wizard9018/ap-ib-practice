@@ -52,12 +52,19 @@ const MIDDLE_TABLE: [number, number | null, number | null, number | null][] = [
   [0, 506, 506, 497],
   [-5, 479, 479, 458],
 ];
-export type SsatLevel = "upper" | "middle";
-export const ssatLevelOf = (examId: string): SsatLevel => (examId.startsWith("ssat-middle-") ? "middle" : "upper");
-const TABLES = { upper: UPPER_TABLE, middle: MIDDLE_TABLE };
-const FLOOR = { upper: 500, middle: 440 };
-const CEIL = { upper: 800, middle: 710 };
-export const SCORE_RANGE = { upper: { min: 1500, max: 2400, section: "500–800" }, middle: { min: 1320, max: 2130, section: "440–710" } };
+export type SsatLevel = "upper" | "middle" | "elementary";
+export const ssatLevelOf = (examId: string): SsatLevel => (examId.startsWith("ssat-elementary-") ? "elementary" : examId.startsWith("ssat-middle-") ? "middle" : "upper");
+// Elementary Level: no penalty for wrong answers; scaled 300-600 per section. The SSAT publishes no raw-to-scaled table for this level, so
+// these "best approximation" charts (index = number correct) come from the practice book "2 Practice Tests for the SSAT Elementary - Third Grade".
+const ELEMENTARY_CHART: Record<SsatSection, number[]> = {
+  Verbal: [300, 320, 330, 340, 350, 360, 370, 380, 390, 400, 410, 420, 420, 430, 430, 440, 440, 450, 450, 460, 460, 470, 470, 480, 490, 500, 520, 540, 560, 580, 600],
+  Quantitative: [300, 320, 330, 340, 350, 360, 370, 380, 390, 400, 410, 420, 420, 430, 430, 440, 440, 450, 450, 460, 460, 470, 470, 480, 490, 500, 520, 540, 560, 580, 600],
+  Reading: [300, 320, 340, 350, 360, 370, 380, 390, 400, 410, 410, 420, 420, 430, 430, 440, 440, 450, 450, 460, 470, 480, 490, 500, 520, 540, 560, 580, 600],
+};
+const TABLES = { upper: UPPER_TABLE, middle: MIDDLE_TABLE, elementary: UPPER_TABLE };
+const FLOOR = { upper: 500, middle: 440, elementary: 300 };
+const CEIL = { upper: 800, middle: 710, elementary: 600 };
+export const SCORE_RANGE = { upper: { min: 1500, max: 2400, section: "500–800" }, middle: { min: 1320, max: 2130, section: "440–710" }, elementary: { min: 900, max: 1800, section: "300–600" } };
 
 // Middle Level medians by grade (Ivy Global's "SSAT Percentiles", third-party)
 export const MIDDLE_MEDIANS: Record<SsatSection, Record<5 | 6 | 7, number>> = {
@@ -68,7 +75,8 @@ export const MIDDLE_MEDIANS: Record<SsatSection, Record<5 | 6 | 7, number>> = {
 export const MIDDLE_MEDIAN_GRADES = [5, 6, 7] as const;
 
 /** Median rows to show for a level: [grade, per-section medians]. */
-export function mediansFor(level: SsatLevel): { grades: number[]; get: (s: SsatSection, g: number) => number } {
+export function mediansFor(level: SsatLevel): { grades: number[]; get: (s: SsatSection, g: number) => number } | null {
+  if (level === "elementary") return null; // no public percentile data for the Elementary Level
   return level === "middle"
     ? { grades: [...MIDDLE_MEDIAN_GRADES], get: (s, g) => MIDDLE_MEDIANS[s][g as 5 | 6 | 7] }
     : { grades: [...MEDIAN_GRADES], get: (s, g) => MEDIANS[s][g as 8 | 9 | 10] };
@@ -76,11 +84,15 @@ export function mediansFor(level: SsatLevel): { grades: number[]; get: (s: SsatS
 
 const COLUMN: Record<SsatSection, 1 | 2 | 3> = { Verbal: 1, Quantitative: 2, Reading: 3 };
 
-export function ssatRawScore(right: number, wrong: number): number {
-  return right - wrong / 4;
+export function ssatRawScore(right: number, wrong: number, level: SsatLevel = "upper"): number {
+  return level === "elementary" ? right : right - wrong / 4;
 }
 
 export function ssatScaledScore(section: SsatSection, raw: number, level: SsatLevel = "upper"): number {
+  if (level === "elementary") {
+    const chart = ELEMENTARY_CHART[section];
+    return chart[Math.max(0, Math.min(chart.length - 1, Math.round(raw)))];
+  }
   const TABLE = TABLES[level];
   const col = COLUMN[section];
   // rows that exist for this section, highest raw first

@@ -53,7 +53,7 @@ export default function App() {
           </button>
           <button onClick={() => setMode("ssat")} className="duo-card hover:-translate-y-1 hover:border-amber-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-amber-600">SSAT</span>
-            <span className="text-sm font-bold text-gray-500">Upper and Middle Level timed mock exams, score shown after you hand in</span>
+            <span className="text-sm font-bold text-gray-500">Upper, Middle and Elementary Level timed mock exams, score shown after you hand in</span>
           </button>
         </div>
       </div>
@@ -78,6 +78,11 @@ const SSAT_MIDDLE_EXAMS = [
   { id: "ssat-middle-princeton-2", title: "Princeton Review Middle Level Practice Test 2", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
 ];
 
+const SSAT_ELEMENTARY_EXAMS = [
+  { id: "ssat-elementary-practice-1", title: "Elementary Level Practice Test 1", note: "Quantitative · Verbal · Reading" },
+  { id: "ssat-elementary-practice-2", title: "Elementary Level Practice Test 2", note: "Quantitative · Verbal · Reading" },
+];
+
 function SsatHome({ onBack, onStart }: { onBack: () => void; onStart: (id: string) => void }) {
   return (
     <main className="duo flex-1 flex items-center justify-center px-4 py-10 relative">
@@ -85,8 +90,8 @@ function SsatHome({ onBack, onStart }: { onBack: () => void; onStart: (id: strin
       <div className="max-w-xl w-full text-center">
         <h1 className="text-3xl font-extrabold text-amber-600 mb-1">SSAT</h1>
         <p className="font-bold text-gray-400 mb-2">Timed mock exams</p>
-        <p className="text-xs font-bold text-gray-400 mb-6">Verbal 30 min · Quantitative 30 min · Reading 40 min, each section timed on its own. The writing sample is not included. You see no answers during the exam; the estimated score appears after you hand in.</p>
-        {([["Upper Level", SSAT_EXAMS], ["Middle Level", SSAT_MIDDLE_EXAMS]] as const).map(([level, list]) => (
+        <p className="text-xs font-bold text-gray-400 mb-6">Upper and Middle: Verbal 30 min · Quantitative 30 min · Reading 40 min. Elementary: Quantitative 30 · Verbal 20 · Reading 30. Each section is timed on its own. The writing sample is not included. You see no answers during the exam; the estimated score appears after you hand in.</p>
+        {([["Upper Level", SSAT_EXAMS], ["Middle Level", SSAT_MIDDLE_EXAMS], ["Elementary Level", SSAT_ELEMENTARY_EXAMS]] as const).map(([level, list]) => (
           <div key={level} className="mb-8">
             <h2 className="text-left text-sm font-extrabold tracking-wide text-gray-500 mb-2">{level.toUpperCase()}</h2>
             <div className="grid gap-4">
