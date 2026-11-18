@@ -33,15 +33,31 @@ const readDone = (): Done => { try { return JSON.parse(localStorage.getItem(KEY)
 const stripLabel = (t: string) => t.replace(/^\(?[A-E][).]\s*/, "");
 
 // the lists need only counts; full rows are fetched when a practice set is opened
+// 章节补充题库（ap_book_questions）与主库合并显示
+const BOOK_IMG = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim() + "/storage/v1/object/public/ap-book/";
+const bookFix = (s: string) => s
+  .replace(/\]\(images\//g, "](" + BOOK_IMG)
+  .replace(/\^\(([^)]+)\)/g, (_, e) => `$^{${e}}$`)
+  .replace(/_\(([^)]+)\)/g, (_, e) => `$_{${e}}$`);
+
 async function loadBriefs(): Promise<Brief[]> {
-  // the API returns at most 1000 rows per request, so read the table page by page
   const all: Brief[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase.from("ap_practice").select("id,topic,kind,papers").order("id").range(from, from + 999);
     if (error || !data) throw new Error("Could not load AP Calculus questions.");
     all.push(...(data as Brief[]));
-    if (data.length < 1000) return all;
+    if (data.length < 1000) break;
   }
+  // 并入章节补充题库：只取主题和编号，列表只用来算数量
+  for (let from = 0; ; from += 1000) {
+    const { data } = await supabase.from("ap_book_questions").select("id,ap_topic").order("id").range(from, from + 999);
+    if (!data || !data.length) break;
+    for (const r of data as { id: number; ap_topic: string | null }[]) {
+      if (r.ap_topic) all.push({ id: "book-" + r.id, topic: r.ap_topic, kind: "mc", papers: [] });
+    }
+    if (data.length < 1000) break;
+  }
+  return all;
 }
 async function loadRows(src: Source): Promise<Row[]> {
   const rows: Row[] = [];
@@ -51,6 +67,28 @@ async function loadRows(src: Source): Promise<Row[]> {
     if (error || !data) throw new Error("Could not load these questions.");
     rows.push(...(data as Row[]));
     if (data.length < 1000) break;
+  }
+  // 并入章节补充题库的题目
+  if (!src.paper) {
+    for (let from = 0; ; from += 1000) {
+      const { data } = await supabase
+        .from("ap_book_questions")
+        .select("id,ap_topic,number,prompt,choices,answer,explanation")
+        .in("ap_topic", src.topics ?? [])
+        .order("id")
+        .range(from, from + 999);
+      if (!data || !data.length) break;
+      for (const r of data as { id: number; ap_topic: string; number: string; prompt: string; choices: Item[]; answer: string | null; explanation: string | null }[]) {
+        rows.push({
+          id: "book-" + r.id, topic: r.ap_topic, kind: "mc", papers: [], paper_numbers: {},
+          year: null, number: r.number,
+          prompt: bookFix(r.prompt),
+          choices: r.choices.map((c) => ({ label: c.label, text: bookFix(c.text) })),
+          parts: [], answer: r.answer, rubric: r.explanation ? bookFix(r.explanation) : null, figures: null,
+        });
+      }
+      if (data.length < 1000) break;
+    }
   }
   const p = src.paper;
   rows.sort(p ? (x, y) => +(x.kind === "fr") - +(y.kind === "fr") || (x.paper_numbers[p] ?? 0) - (y.paper_numbers[p] ?? 0)
