@@ -11,6 +11,7 @@ const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL.trim();
 const db = createClient(URL_, process.env.SUPABASE_SERVICE_ROLE_KEY.trim(), { auth: { persistSession: false, autoRefreshToken: false } });
 const check = (r, label) => { if (r.error) throw new Error(`${label}: ${r.error.code ?? ""} ${r.error.message}`); };
 const BUCKET = "ssat-images";
+const VERSION = Date.now().toString(36); // images are cached for a year under the same path; a new version tag makes re-imports visible
 { const { error } = await db.storage.createBucket(BUCKET, { public: true }); if (error && !/already exists/i.test(error.message)) throw new Error(error.message); }
 
 // section kind -> id, title, minutes (Upper Level: Verbal 30, Quantitative 30, Reading 40)
@@ -47,7 +48,7 @@ for (const m of manifest) {
     const dest = `${m.id}/${f}`;
     const up = await db.storage.from(BUCKET).upload(dest, await readFile(path.join(m.dir, f)), { contentType: "image/png", upsert: true, cacheControl: "31536000" });
     if (up.error) throw new Error(`upload ${dest}: ${up.error.message}`);
-    urlOf.set(f, `${URL_}/storage/v1/object/public/${BUCKET}/${dest}`);
+    urlOf.set(f, `${URL_}/storage/v1/object/public/${BUCKET}/${dest}?v=${VERSION}`);
   }
 
   const sections = order.map((s) => {
