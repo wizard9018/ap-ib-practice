@@ -7,7 +7,7 @@ import HighlightableHTML from "./HighlightableHTML";
 import Timer, { usedSeconds } from "./Timer";
 import Navigator from "./Navigator";
 import Calculator from "./Calculator";
-import { MEDIANS, MEDIAN_GRADES, medianTotal, ssatRawScore, ssatScaledScore, type SsatSection } from "@/lib/ssat-score";
+import { SCORE_RANGE, mediansFor, ssatLevelOf, ssatRawScore, ssatScaledScore, type SsatSection } from "@/lib/ssat-score";
 
 type Question = { id: string; number: number; section: string; prompt: Block[]; choices: Choice[] };
 type Section = { title: string; minutes: number; calculator: boolean; directions: string[]; note: string };
@@ -318,12 +318,14 @@ export default function Runner({ exam, attempt, email, onSave, onSubmit, onSignO
   if (phase === "result" && result) {
     const byId = new Map(result.items.map((it) => [it.id, it]));
     // SSAT: raw = right - wrong/4 per section (both Quantitative sections count as one), then the estimated scaled score
+    const level = ssatLevelOf(attempt.exam_id);
+    const med = mediansFor(level);
     const ssat = attempt.exam_id.startsWith("ssat-")
       ? (["Verbal", "Quantitative", "Reading"] as SsatSection[]).map((name) => {
           const items = result.items.filter((x) => (name === "Quantitative" ? x.section_id.startsWith("quant") : x.section_id === name.toLowerCase()));
           const right = items.filter((x) => x.isCorrect).length, wrong = items.filter((x) => x.selected && !x.isCorrect).length;
           const raw = ssatRawScore(right, wrong);
-          return { name, total: items.length, right, wrong, blank: items.length - right - wrong, raw, scaled: ssatScaledScore(name, raw) };
+          return { name, total: items.length, right, wrong, blank: items.length - right - wrong, raw, scaled: ssatScaledScore(name, raw, level) };
         })
       : null;
     return (
@@ -331,7 +333,7 @@ export default function Runner({ exam, attempt, email, onSave, onSubmit, onSignO
         {ssat && (
           <section className="border border-gray-200 rounded-2xl p-6 mb-8 text-center">
             <p className="text-xs font-semibold tracking-wide text-blue-700">ESTIMATED SSAT SCORE</p>
-            <p className="text-5xl font-extrabold mt-1">{ssat.reduce((a, s) => a + s.scaled, 0)}<span className="text-lg text-gray-400 font-bold"> / 2400</span></p>
+            <p className="text-5xl font-extrabold mt-1">{ssat.reduce((a, s) => a + s.scaled, 0)}<span className="text-lg text-gray-400 font-bold"> / {SCORE_RANGE[level].max}</span></p>
             <div className="grid grid-cols-3 gap-3 mt-5 text-sm">
               {ssat.map((s) => (
                 <div key={s.name} className="rounded-xl bg-gray-50 p-3">
@@ -339,12 +341,12 @@ export default function Runner({ exam, attempt, email, onSave, onSubmit, onSignO
                   <div className="text-2xl font-bold">{s.scaled}</div>
                   <div className="text-xs text-gray-500">{s.right} right · {s.wrong} wrong · {s.blank} blank</div>
                   <div className="text-xs text-gray-400">raw {Number(s.raw.toFixed(2))} of {s.total}</div>
-                  <div className="text-xs text-gray-500 mt-1">Median G8 {MEDIANS[s.name][8]} · G9 {MEDIANS[s.name][9]} · G10 {MEDIANS[s.name][10]}</div>
+                  <div className="text-xs text-gray-500 mt-1">Median {med.grades.map((g) => `G${g} ${med.get(s.name, g)}`).join(" · ")}</div>
                 </div>
               ))}
             </div>
-            <p className="text-sm text-gray-600 mt-4">Median total (50th percentile): {MEDIAN_GRADES.map((g) => `Grade ${g} ${medianTotal(g)}`).join(" · ")}</p>
-            <p className="text-xs text-gray-400 mt-2">Estimate from the SSAT&apos;s published raw-to-scaled table (500–800 per section). It is not an official SSAT score; the real conversion differs a little between test forms. A blank paper scores 1590 here because a raw score of 0 maps to 524 / 545 / 521. Medians are third-party figures (Ivy Global) for same-grade test takers over the past three years.</p>
+            <p className="text-sm text-gray-600 mt-4">Median total (50th percentile): {med.grades.map((g) => `Grade ${g} ${((["Verbal", "Quantitative", "Reading"] as SsatSection[]).reduce((a, n) => a + med.get(n, g), 0))}`).join(" · ")}</p>
+            <p className="text-xs text-gray-400 mt-2">Estimate from the SSAT&apos;s published raw-to-scaled table ({SCORE_RANGE[level].section} per section). It is not an official SSAT score; the real conversion differs a little between test forms. A blank paper scores {ssat.reduce((a, x) => a + ssatScaledScore(x.name, 0, level), 0)} here because a raw score of 0 maps to {ssat.map((x) => ssatScaledScore(x.name, 0, level)).join(" / ")}. Medians are third-party figures (Ivy Global) for same-grade test takers over the past three years.</p>
           </section>
         )}
         <h1 className="text-3xl font-bold text-center">{result.correct} / {result.total} correct</h1>
