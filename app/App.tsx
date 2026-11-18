@@ -74,8 +74,15 @@ const SSAT_EXAMS = [
   { id: "ssat-upper-barrons-2", title: "Barron's Practice Test 2", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
 ];
 const SSAT_MIDDLE_EXAMS = [
-  { id: "ssat-middle-princeton-1", title: "Princeton Review Middle Level Practice Test 1", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
-  { id: "ssat-middle-princeton-2", title: "Princeton Review Middle Level Practice Test 2", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
+  { id: "ssat-middle-official-1", title: "Official Guide Practice Test I", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
+  { id: "ssat-middle-official-2", title: "Official Guide Practice Test II", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
+  { id: "ssat-middle-ivy-1", title: "Ivy Global Practice Test 1", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
+  { id: "ssat-middle-mcgraw-hill-1", title: "McGraw-Hill Practice Test 1", note: "Verbal · Quantitative 1 · Reading · Quantitative 2" },
+  { id: "ssat-middle-mcgraw-hill-2", title: "McGraw-Hill Practice Test 2", note: "Verbal · Quantitative 1 · Reading · Quantitative 2" },
+  { id: "ssat-middle-mcgraw-hill-3", title: "McGraw-Hill Practice Test 3", note: "Verbal · Quantitative 1 · Reading · Quantitative 2" },
+  { id: "ssat-middle-tivitails-1", title: "Tivitails Practice Test 1", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
+  { id: "ssat-middle-princeton-1", title: "Princeton Review Practice Test 1", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
+  { id: "ssat-middle-princeton-2", title: "Princeton Review Practice Test 2", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
 ];
 
 const SSAT_ELEMENTARY_EXAMS = [
