@@ -11,14 +11,15 @@ import ApPractice from "./ApPractice";
 // the API sends sections as a list with time_minutes; the runner reads them by id
 function toRunnerExam(e: PublicExam): Exam {
   return {
-    exam: `${e.year} ${e.subject}`,
+    exam: e.year ? `${e.year} ${e.subject}` : e.subject,
     sections: Object.fromEntries(e.sections.map((s) => [s.id, { title: s.title, minutes: s.time_minutes, calculator: s.calculator, directions: s.directions, note: s.note }])),
     questions: e.questions.map((q) => ({ id: q.id, number: q.number, section: q.section_id, prompt: q.prompt, choices: q.choices })),
   };
 }
 
 export default function App() {
-  const [mode, setMode] = useState<"home" | "appractice" | "apexam" | "ib">("home");
+  const [mode, setMode] = useState<"home" | "appractice" | "apexam" | "ib" | "ssat" | "ssatexam">("home");
+  const [ssatExam, setSsatExam] = useState("");
   const [homeEmail, setHomeEmail] = useState<string | null>(null);
   const [homeLogin, setHomeLogin] = useState(false);
   useEffect(() => {
@@ -30,6 +31,8 @@ export default function App() {
   if (mode === "ib") return <IbPractice onBack={() => setMode("home")} />;
   if (mode === "appractice") return <ApPractice onBack={() => setMode("home")} onExam={() => setMode("apexam")} />;
   if (mode === "apexam") return <ApExam />;
+  if (mode === "ssat") return <SsatHome onBack={() => setMode("home")} onStart={(id) => { setSsatExam(id); setMode("ssatexam"); }} />;
+  if (mode === "ssatexam") return <ApExam examId={ssatExam} />;
   return (
     <main className="duo flex-1 flex items-center justify-center px-4 py-10 relative">
       <div className="absolute right-4 top-3 text-sm font-bold text-gray-500 flex items-center gap-3">
@@ -39,7 +42,7 @@ export default function App() {
       <div className="max-w-xl w-full text-center">
         <h1 className="text-4xl font-extrabold text-green-600 mb-1">AP / IB Practice</h1>
         <p className="font-bold text-gray-400 mb-8">Choose a question bank</p>
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-3 gap-4">
           <button onClick={() => setMode("appractice")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-sky-600">AP</span>
             <span className="text-sm font-bold text-gray-500">Calculus AB practice by unit, plus a timed mock exam</span>
@@ -48,13 +51,43 @@ export default function App() {
             <span className="block text-2xl font-extrabold text-green-600">IB</span>
             <span className="text-sm font-bold text-gray-500">Math AA, Physics, Chemistry, Biology and Economics (HL), practice by topic</span>
           </button>
+          <button onClick={() => setMode("ssat")} className="duo-card hover:-translate-y-1 hover:border-amber-300 p-6 text-left">
+            <span className="block text-2xl font-extrabold text-amber-600">SSAT</span>
+            <span className="text-sm font-bold text-gray-500">Upper Level timed mock exams, score shown after you hand in</span>
+          </button>
         </div>
       </div>
     </main>
   );
 }
 
-function ApExam() {
+const SSAT_EXAMS = [
+  { id: "ssat-upper-mcgraw-hill-1", title: "McGraw-Hill Practice Test 1", note: "Verbal · Quantitative 1 · Reading · Quantitative 2" },
+  { id: "ssat-upper-barrons-1", title: "Barron's Practice Test 1", note: "Quantitative 1 · Reading · Verbal · Quantitative 2" },
+];
+
+function SsatHome({ onBack, onStart }: { onBack: () => void; onStart: (id: string) => void }) {
+  return (
+    <main className="duo flex-1 flex items-center justify-center px-4 py-10 relative">
+      <button onClick={onBack} className="absolute left-4 top-4 text-sm text-blue-700 hover:underline">← Back</button>
+      <div className="max-w-xl w-full text-center">
+        <h1 className="text-3xl font-extrabold text-amber-600 mb-1">SSAT Upper Level</h1>
+        <p className="font-bold text-gray-400 mb-2">Timed mock exams</p>
+        <p className="text-xs font-bold text-gray-400 mb-6">Verbal 30 min · Quantitative 30 min · Reading 40 min, each section timed on its own. The writing sample is not included. You see no answers during the exam; the estimated score appears after you hand in.</p>
+        <div className="grid gap-4">
+          {SSAT_EXAMS.map((e) => (
+            <button key={e.id} onClick={() => onStart(e.id)} className="duo-card hover:-translate-y-1 hover:border-amber-300 p-5 text-left">
+              <span className="block text-lg font-extrabold text-gray-800">{e.title}</span>
+              <span className="text-sm font-bold text-gray-500">{e.note}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function ApExam({ examId }: { examId?: string }) {
   const [phase, setPhase] = useState<"loading" | "login" | "ready" | "error">("loading");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
@@ -66,11 +99,11 @@ function ApExam() {
     if (!s.session) { setPhase("login"); return; }
     setEmail(s.session.user.email ?? "");
     try {
-      const r = await api<{ attempt: Attempt; exam: PublicExam }>("/api/attempts", { method: "POST" });
+      const r = await api<{ attempt: Attempt; exam: PublicExam }>("/api/attempts", { method: "POST", body: JSON.stringify(examId ? { exam_id: examId } : {}) });
       setData({ attempt: r.attempt, exam: toRunnerExam(r.exam) });
       setPhase("ready");
     } catch (e) { setError((e as Error).message); setPhase("error"); }
-  }, []);
+  }, [examId]);
   useEffect(() => { void load(); }, [load]);
 
   if (phase === "loading") return <main className="flex-1 flex items-center justify-center text-gray-400 text-sm">Loading…</main>;

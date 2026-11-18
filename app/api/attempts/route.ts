@@ -1,12 +1,16 @@
 import { admin, ApiError, failure, loadExam, publicExam, userId } from "@/lib/server";
 import { initialState } from "@/lib/grading";
 
-const EXAM_ID = "calculus-ab-2008";
+const DEFAULT_EXAM_ID = "calculus-ab-2008";
 
 // The student's open attempt for this exam (created on first use), plus the exam without its answer key.
+// The body may name an exam ({ exam_id }); only the mock exams are allowed (the Calculus AB one, and the SSAT tests).
 export async function POST(request: Request) {
   try {
     const owner = await userId(request);
+    const requested = ((await request.json().catch(() => ({}))) as { exam_id?: unknown }).exam_id;
+    const EXAM_ID = requested === undefined ? DEFAULT_EXAM_ID : requested;
+    if (typeof EXAM_ID !== "string" || (EXAM_ID !== DEFAULT_EXAM_ID && !/^ssat-[a-z0-9-]+$/.test(EXAM_ID))) throw new ApiError(404, "Exam not found.");
     const exam = publicExam(await loadExam(EXAM_ID));
     const client = admin();
     const find = () => client.from("ap_attempts").select("*").eq("user_id", owner).eq("exam_id", EXAM_ID).eq("mode", "mock").eq("status", "in_progress").maybeSingle();
