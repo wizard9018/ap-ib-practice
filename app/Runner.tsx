@@ -26,6 +26,14 @@ const blocksHtml = (blocks: Block[]) =>
     : b.type === "table" ? `<table class="my-3 border-collapse text-center"><tbody>${b.rows.map((r) => `<tr>${r.map((c) => `<td class="border border-gray-400 px-4 py-1.5">${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
     : `<p class="my-1">${inline(b.text)}</p>`).join("");
 
+// SSAT: the shared material (passage, graph) stays on the left; the question itself sits on the right above the answer choices.
+// Imported SSAT prompts are [context image?, ...question blocks]; Elementary reading prompts are [...passage blocks, question text].
+function splitSsatPrompt(examId: string, section: string, prompt: Block[]): { ctx: Block[]; stem: Block[] } {
+  if (!examId.startsWith("ssat-")) return { ctx: prompt, stem: [] };
+  if (examId.startsWith("ssat-elementary-")) return section === "reading" && prompt.length > 1 ? { ctx: prompt.slice(0, -1), stem: prompt.slice(-1) } : { ctx: [], stem: prompt };
+  return prompt.length > 1 && prompt[0].type === "image" ? { ctx: prompt.slice(0, 1), stem: prompt.slice(1) } : { ctx: [], stem: prompt };
+}
+
 const SECTION_DIRECTIONS_EXTRA = ["The section is submitted automatically when time runs out. You cannot return to a section once it is submitted.", "Keyboard: A–E to choose an answer, left/right arrows to change question."];
 
 type Props = {
@@ -73,6 +81,7 @@ export default function Runner({ exam, attempt, email, onSave, onSubmit, onSignO
   const firstIdx = firstOf(secIdx);
   const lastIdx = firstIdx + sectionQs.length - 1;
   const q = qs[i];
+  const split = splitSsatPrompt(attempt.exam_id, q?.section ?? "", q?.prompt ?? []);
   const limit = sec.minutes * 60;
   const isLastSection = secIdx === sectionIds.length - 1;
   // a brand-new attempt (nothing answered, still at the first directions page)
@@ -458,7 +467,7 @@ export default function Runner({ exam, attempt, email, onSave, onSubmit, onSignO
         <div ref={splitRef} className="h-full flex">
           <div style={{ width: `${splitPercent}%` }} className="overflow-y-auto shrink-0">
             <div className="p-6 prose max-w-none exam-serif">
-              <HighlightableHTML key={q.id} html={blocksHtml(q.prompt)} />
+              <HighlightableHTML key={q.id} html={blocksHtml(split.ctx)} />
             </div>
           </div>
           <div
@@ -479,6 +488,7 @@ export default function Runner({ exam, attempt, email, onSave, onSubmit, onSignO
                 className={`text-xs font-bold rounded px-2 py-1 ${eliminator ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"}`}>A̶B̶C̶</button>
             </div>
             <div className="p-6">
+              {split.stem.length > 0 && <div className="exam-serif mb-4" dangerouslySetInnerHTML={{ __html: blocksHtml(split.stem) }} />}
               <div className="space-y-2">
                 {q.choices.map((c) => {
                   const out = crossedHere.includes(c.label);
