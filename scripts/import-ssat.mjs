@@ -21,7 +21,7 @@ const KINDS = {
   Reading: { id: "reading", title: "Reading", minutes: 40, note: "40 questions · 40 minutes" },
 };
 const DIRECTIONS = {
-  verbal: ["Each question is a synonym or an analogy; choose the best answer.", "A correct answer earns 1 point, a wrong answer loses 1/4 point and a blank earns 0."],
+  verbal: ["Questions 1-30 are synonyms: select the word or phrase that means most nearly the same as the word in capital letters. Questions 31-60 are analogies: select the answer choice that best completes the relationship.", "A correct answer earns 1 point, a wrong answer loses 1/4 point and a blank earns 0."],
   quant1: ["Each question has five choices; choose the best answer. Work out answers in the margins; no calculator is allowed.", "A correct answer earns 1 point, a wrong answer loses 1/4 point and a blank earns 0."],
   quant2: ["Each question has five choices; choose the best answer. Work out answers in the margins; no calculator is allowed.", "A correct answer earns 1 point, a wrong answer loses 1/4 point and a blank earns 0."],
   reading: ["Read each passage and choose the best answer to the questions about it.", "A correct answer earns 1 point, a wrong answer loses 1/4 point and a blank earns 0."],
@@ -62,7 +62,10 @@ for (const m of manifest) {
     n++;
     const k = kindOf(s), id = `${m.id}-${k.id}-${r.no}`;
     const sp = splitOf(r);
-    const prompt = [...(r.ctx ? [{ type: "image", src: urlOf.get(r.ctx) }] : []), { type: "image", src: urlOf.get(sp ? sp.stem : r.img) }];
+    // Verbal: questions 1-30 are synonyms, 31-60 analogies; each gets its own instruction line above the stem
+    const hint = k.id === "verbal" ? [{ type: "text", text: r.no <= 30 ? "Select the word or phrase that means most nearly the same as the word in capital letters." : "Select the answer choice that best completes the meaning of the sentence." }] : [];
+    const stem = sp?.stemText ? { type: "text", text: sp.stemText } : { type: "image", src: urlOf.get(sp ? sp.stem : r.img) };
+    const prompt = [...(r.ctx ? [{ type: "image", src: urlOf.get(r.ctx) }] : []), ...hint, stem];
     const choices = sp
       ? sp.choices.map((c) => ({ label: c.label, content: [c.text !== undefined ? { type: "text", text: c.text } : { type: "image", src: urlOf.get(c.img) }] }))
       : "ABCDE".split("").map((label) => ({ label, content: [] }));
