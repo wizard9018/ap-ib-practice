@@ -7,6 +7,7 @@ import Login from "./Login";
 import Runner, { type Exam } from "./Runner";
 import IbPractice from "./IbPractice";
 import ApPractice from "./ApPractice";
+import ApPhysics from "./ApPhysics";
 
 // the API sends sections as a list with time_minutes; the runner reads them by id
 function toRunnerExam(e: PublicExam): Exam {
@@ -18,7 +19,7 @@ function toRunnerExam(e: PublicExam): Exam {
 }
 
 export default function App() {
-  const [mode, setMode] = useState<"home" | "appractice" | "apexam" | "ib" | "ssat" | "ssatexam">("home");
+  const [mode, setMode] = useState<"home" | "apphysics" | "appractice" | "apexam" | "ib" | "ssat" | "ssatexam">("home");
   const [ssatExam, setSsatExam] = useState("");
   const [homeEmail, setHomeEmail] = useState<string | null>(null);
   const [homeLogin, setHomeLogin] = useState(false);
@@ -30,6 +31,7 @@ export default function App() {
   if (homeLogin) return (<><button onClick={() => setHomeLogin(false)} className="absolute left-4 top-4 text-sm text-blue-700 hover:underline">← Back</button><Login onSignedIn={() => setHomeLogin(false)} /></>);
   if (mode === "ib") return <IbPractice onBack={() => setMode("home")} />;
   if (mode === "appractice") return <ApPractice onBack={() => setMode("home")} onExam={() => setMode("apexam")} />;
+  if (mode === "apphysics") return <ApPhysics onBack={() => setMode("home")} />;
   if (mode === "apexam") return <ApExam />;
   if (mode === "ssat") return <SsatHome onBack={() => setMode("home")} onStart={(id) => { setSsatExam(id); setMode("ssatexam"); }} />;
   if (mode === "ssatexam") return <ApExam examId={ssatExam} />;
@@ -42,10 +44,14 @@ export default function App() {
       <div className="max-w-xl w-full text-center">
         <h1 className="text-4xl font-extrabold text-green-600 mb-1">AP / IB Practice</h1>
         <p className="font-bold text-gray-400 mb-8">Choose a question bank</p>
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 gap-4">
           <button onClick={() => setMode("appractice")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-sky-600">AP</span>
             <span className="text-sm font-bold text-gray-500">Calculus AB practice by unit, plus a timed mock exam</span>
+          </button>
+          <button onClick={() => setMode("apphysics")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
+            <span className="block text-2xl font-extrabold text-sky-600">AP Physics 1</span>
+            <span className="text-sm font-bold text-gray-500">Multiple-choice practice by unit</span>
           </button>
           <button onClick={() => setMode("ib")} className="duo-card hover:-translate-y-1 hover:border-green-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-green-600">IB</span>
