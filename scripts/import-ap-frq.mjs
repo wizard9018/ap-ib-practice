@@ -12,14 +12,15 @@ const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL.trim(), process.env
 const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL.trim()}/storage/v1/object/public/ap-figures/`;
 const up = new Map();
 const withImgs = (s) => s.replace(/@@IMG:([^@]+)@@/g, (_, p) => { const n = `${tag}/${p.replace(/^images\//, "").replace("/", "__")}`; up.set(n, p); return `\n\n![](${base}${n})\n\n`; });
-
 const pagesUp = new Map();
 const pageImg = (f) => { const n = `${tag}/frq/${f.replace("__", "-")}`; pagesUp.set(n, f); return `![](${base}${n})`; };
+// original page images (scoring-guideline pages the OCR could not read)
+const withPages = (s) => withImgs(s).replace(/@@PAGE:([^@]+)@@/g, (_, f) => "\n\n" + pageImg(f) + "\n\n");
 const rows = [];
 for (const r of raw) {
   const code = topics[r.id];
   if (!code || code === "0") continue;
-  rows.push({ id: r.id, course: tag, unit: +code.split(".")[0], kind: "fr", year: r.year, number: r.form === "A" ? r.number : `${r.number} (${r.form})`, prompt: [...(r.images ?? []).map((f) => pageImg(f)), r.images?.length ? "" : withImgs(r.prompt)].filter(Boolean).join("\n\n"), choices: [], parts: [], answer: null, rubric: r.rubric ? withImgs(r.rubric) : null, topic: `${tag.toUpperCase()}:${code}`, papers: [], paper_numbers: {}, figures: null });
+  rows.push({ id: r.id, course: tag, unit: +code.split(".")[0], kind: "fr", year: r.year, number: r.form === "A" ? r.number : `${r.number} (${r.form})`, prompt: [...(r.images ?? []).map((f) => pageImg(f)), r.images?.length ? "" : withImgs(r.prompt)].filter(Boolean).join("\n\n"), choices: [], parts: [], answer: null, rubric: r.rubric ? withPages(r.rubric) : null, topic: `${tag.toUpperCase()}:${code}`, papers: [], paper_numbers: {}, figures: null });
 }
 for (const [n, f] of pagesUp) {
   const { error } = await db.storage.from("ap-figures").upload(n, await readFile(new URL(`frqpages/${f}`, D)), { contentType: "image/png", upsert: true, cacheControl: "31536000" });
