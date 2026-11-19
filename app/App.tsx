@@ -19,7 +19,7 @@ function toRunnerExam(e: PublicExam): Exam {
 }
 
 export default function App() {
-  const [mode, setMode] = useState<"home" | "apphysics" | "appractice" | "apexam" | "ib" | "ssat" | "ssatexam">("home");
+  const [mode, setMode] = useState<"home" | "aphome" | "apphysics" | "appractice" | "apexam" | "ib" | "ssat" | "ssatexam">("home");
   const [ssatExam, setSsatExam] = useState("");
   const [homeEmail, setHomeEmail] = useState<string | null>(null);
   const [homeLogin, setHomeLogin] = useState(false);
@@ -30,8 +30,9 @@ export default function App() {
   }, []);
   if (homeLogin) return (<><button onClick={() => setHomeLogin(false)} className="absolute left-4 top-4 text-sm text-blue-700 hover:underline">← Back</button><Login onSignedIn={() => setHomeLogin(false)} /></>);
   if (mode === "ib") return <IbPractice onBack={() => setMode("home")} />;
-  if (mode === "appractice") return <ApPractice onBack={() => setMode("home")} onExam={() => setMode("apexam")} />;
-  if (mode === "apphysics") return <ApPhysics onBack={() => setMode("home")} />;
+  if (mode === "appractice") return <ApPractice onBack={() => setMode("aphome")} onExam={() => setMode("apexam")} />;
+  if (mode === "aphome") return <ApHome onBack={() => setMode("home")} onPick={(c) => setMode(c === "calc" ? "appractice" : "apphysics")} />;
+  if (mode === "apphysics") return <ApPhysics onBack={() => setMode("aphome")} />;
   if (mode === "apexam") return <ApExam />;
   if (mode === "ssat") return <SsatHome onBack={() => setMode("home")} onStart={(id) => { setSsatExam(id); setMode("ssatexam"); }} />;
   if (mode === "ssatexam") return <ApExam examId={ssatExam} />;
@@ -44,14 +45,10 @@ export default function App() {
       <div className="max-w-xl w-full text-center">
         <h1 className="text-4xl font-extrabold text-green-600 mb-1">AP / IB Practice</h1>
         <p className="font-bold text-gray-400 mb-8">Choose a question bank</p>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <button onClick={() => setMode("appractice")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
+        <div className="grid sm:grid-cols-3 gap-4">
+          <button onClick={() => setMode("aphome")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-sky-600">AP</span>
-            <span className="text-sm font-bold text-gray-500">Calculus AB practice by unit, plus a timed mock exam</span>
-          </button>
-          <button onClick={() => setMode("apphysics")} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
-            <span className="block text-2xl font-extrabold text-sky-600">AP Physics 1</span>
-            <span className="text-sm font-bold text-gray-500">Multiple-choice practice by unit</span>
+            <span className="text-sm font-bold text-gray-500">Calculus and Physics 1, practice by topic, plus a timed mock exam</span>
           </button>
           <button onClick={() => setMode("ib")} className="duo-card hover:-translate-y-1 hover:border-green-300 p-6 text-left">
             <span className="block text-2xl font-extrabold text-green-600">IB</span>
@@ -95,6 +92,27 @@ const SSAT_ELEMENTARY_EXAMS = [
   { id: "ssat-elementary-practice-1", title: "Elementary Level Practice Test 1", note: "Quantitative · Verbal · Reading" },
   { id: "ssat-elementary-practice-2", title: "Elementary Level Practice Test 2", note: "Quantitative · Verbal · Reading" },
 ];
+
+function ApHome({ onBack, onPick }: { onBack: () => void; onPick: (c: "calc" | "p1") => void }) {
+  const courses = [{ key: "calc" as const, name: "AP Calculus AB / BC", note: "Practice by topic, free response, timed mock exam" }, { key: "p1" as const, name: "AP Physics 1", note: "Multiple-choice practice by topic" }];
+  return (
+    <main className="duo flex-1 flex items-center justify-center px-4 py-10 relative">
+      <button onClick={onBack} className="absolute left-4 top-4 text-sm text-blue-700 hover:underline">← Back</button>
+      <div className="max-w-xl w-full text-center">
+        <h1 className="text-3xl font-extrabold text-sky-600 mb-1">AP</h1>
+        <p className="font-bold text-gray-400 mb-8">Choose a course</p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {courses.map((c) => (
+            <button key={c.key} onClick={() => onPick(c.key)} className="duo-card hover:-translate-y-1 hover:border-sky-300 p-6 text-left">
+              <span className="block text-xl font-extrabold text-sky-600">{c.name}</span>
+              <span className="text-sm font-bold text-gray-500">{c.note}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
 
 function SsatHome({ onBack, onStart }: { onBack: () => void; onStart: (id: string) => void }) {
   return (
