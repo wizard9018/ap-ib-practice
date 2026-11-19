@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
 
 const sub = process.argv[2];
-const tag = { "ap-macroeconomics": "ma", "ap-microeconomics": "mi" }[sub];
+const tag = { "ap-macroeconomics": "ma", "ap-microeconomics": "mi", "ap-physics-1": "p1", "ap-physics-2": "p2" }[sub];
 const D = new URL("../../data/", import.meta.url);
 const raw = JSON.parse(await readFile(new URL(`${sub}-frq-raw.json`, D), "utf8"));
 const topics = JSON.parse(await readFile(new URL(`${sub}-frq-topics.json`, D), "utf8"));
