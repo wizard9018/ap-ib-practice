@@ -3,20 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/browser";
 import { Md, MdMath } from "./Md";
+import { SCI } from "./apSciTopics";
 
-type Q = { id: string; unit: number; year: number | null; number: string; prompt: string; choices: { label: string; text: string }[]; answer: string };
-const COURSES = {
-  p1: { name: "AP Physics 1", units: { 1: "Kinematics", 2: "Force and Translational Dynamics", 3: "Work, Energy, and Power", 4: "Linear Momentum", 5: "Torque and Rotational Dynamics", 6: "Energy and Momentum of Rotating Systems", 7: "Oscillations", 8: "Fluids" } },
-} as const;
-type CourseKey = keyof typeof COURSES;
+type Q = { id: string; unit: number; topic: string; year: number | null; number: string; prompt: string; choices: { label: string; text: string }[]; answer: string };
+type CourseKey = keyof typeof SCI;
 const KEY = "ap-physics-done-v1";
 const readDone = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; } };
 
 export default function ApPhysics({ onBack, course = "p1" }: { onBack: () => void; course?: CourseKey }) {
-  const C = COURSES[course];
+  const C = SCI[course];
   const [all, setAll] = useState<Q[] | null>(null);
   const [error, setError] = useState("");
-  const [picked, setPicked] = useState<number[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
   const [set, setSet] = useState<Q[] | null>(null);
   const [i, setI] = useState(0);
   const [sel, setSel] = useState<string[]>([]);
@@ -28,7 +26,7 @@ export default function ApPhysics({ onBack, course = "p1" }: { onBack: () => voi
     void (async () => {
       const rows: Q[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data, error: e } = await supabase.from("ap_practice").select("id,unit,year,number,prompt,choices,answer").eq("course", course).order("id").range(from, from + 999);
+        const { data, error: e } = await supabase.from("ap_practice").select("id,unit,topic,year,number,prompt,choices,answer").eq("course", course).order("id").range(from, from + 999);
         if (e || !data) { setError("Could not load these questions."); return; }
         rows.push(...(data as Q[]));
         if (data.length < 1000) break;
@@ -37,9 +35,10 @@ export default function ApPhysics({ onBack, course = "p1" }: { onBack: () => voi
     })();
   }, [course]);
 
-  const counts = useMemo(() => { const m: Record<number, { n: number; d: number }> = {}; for (const q of all ?? []) { const e = (m[q.unit] ??= { n: 0, d: 0 }); e.n++; if (done[q.id]) e.d++; } return m; }, [all, done]);
+  const code = (q: Q) => q.topic.split(":")[1];
+  const counts = useMemo(() => { const m: Record<string, { n: number; d: number }> = {}; for (const q of all ?? []) { const e = (m[code(q)] ??= { n: 0, d: 0 }); e.n++; if (done[q.id]) e.d++; } return m; }, [all, done]);
 
-  const start = () => { setSet((all ?? []).filter((q) => picked.includes(q.unit)).sort((a, b) => a.unit - b.unit || (b.year ?? 0) - (a.year ?? 0) || +a.number - +b.number)); setI(0); setSel([]); setChecked(false); };
+  const start = () => { setSet((all ?? []).filter((q) => picked.includes(code(q))).sort((a, b) => Object.keys(C.topics).indexOf(code(a)) - Object.keys(C.topics).indexOf(code(b)) || (b.year ?? 0) - (a.year ?? 0) || +a.number - +b.number)); setI(0); setSel([]); setChecked(false); };
   const q = set?.[i];
   const multi = (q?.answer.length ?? 0) > 1;
   const pick = (l: string) => { if (checked) return; setSel((s) => (multi ? (s.includes(l) ? s.filter((x) => x !== l) : [...s, l]) : [l])); };
@@ -54,8 +53,8 @@ export default function ApPhysics({ onBack, course = "p1" }: { onBack: () => voi
     const right = [...sel].sort().join("") === q.answer;
     return (
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
-        <button onClick={() => setSet(null)} className="text-sm text-blue-700 hover:underline">← Back to units</button>
-        <p className="text-xs text-gray-400 mt-4 mb-2">{q.year ? `${q.year} ` : ""}Multiple choice · Question {q.number} · {C.units[q.unit as keyof typeof C.units]} · {i + 1} of {set.length}</p>
+        <button onClick={() => setSet(null)} className="text-sm text-blue-700 hover:underline">← Back to topics</button>
+        <p className="text-xs text-gray-400 mt-4 mb-2">{q.year ? `${q.year} ` : ""}Multiple choice · Question {q.number} · {code(q)} {C.topics[code(q)]} · {i + 1} of {set.length}</p>
         <Md>{q.prompt}</Md>
         {multi && <p className="text-sm text-gray-500 mt-3">Select {q.answer.length} answers.</p>}
         <div className="mt-4 space-y-2">
@@ -80,19 +79,29 @@ export default function ApPhysics({ onBack, course = "p1" }: { onBack: () => voi
     <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-8">
       <button onClick={onBack} className="text-sm text-blue-700 hover:underline">← Back</button>
       <h1 className="text-2xl font-extrabold text-gray-800 mt-4">{C.name}</h1>
-      <p className="text-gray-600 text-sm mt-1">Tick the units you want to practice together.</p>
+      <p className="text-gray-600 text-sm mt-1">Tick the topics you want to practice together.</p>
       {error && <p className="text-red-600 mt-4">{error}</p>}
       {!all && !error && <p className="text-gray-400 mt-6">Loading…</p>}
-      <div className="mt-4 space-y-2">
-        {Object.entries(C.units).map(([u, name]) => counts[+u] && (
-          <label key={u} className="flex items-center gap-3 rounded-lg border-2 border-gray-200 px-3 py-3 cursor-pointer hover:bg-gray-50">
-            <input type="checkbox" checked={picked.includes(+u)} onChange={() => setPicked((p) => (p.includes(+u) ? p.filter((x) => x !== +u) : [...p, +u]))} />
-            <span className="flex-1"><b>Unit {u}</b> {name}</span>
-            <span className="text-xs text-gray-500">{counts[+u].n} MC · {counts[+u].d} done</span>
-          </label>
-        ))}
+      <div className="mt-4 space-y-5">
+        {Object.entries(C.units).map(([u, name]) => {
+          const codes = Object.keys(C.topics).filter((t) => t.split(".")[0] === u && counts[t]);
+          return codes.length > 0 && (
+            <div key={u}>
+              <h2 className="font-bold text-gray-700 mb-2">Unit {u}: {name}</h2>
+              <div className="space-y-2">
+                {codes.map((t) => (
+                  <label key={t} className="flex items-center gap-3 rounded-lg border-2 border-gray-200 px-3 py-3 cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" checked={picked.includes(t)} onChange={() => setPicked((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]))} />
+                    <span className="flex-1"><b>{t}</b> {C.topics[t]}</span>
+                    <span className="text-xs text-gray-500">{counts[t].n} MC · {counts[t].d} done</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <button disabled={!picked.length} onClick={start} className="mt-6 w-full rounded-full bg-blue-600 text-white font-semibold py-3 disabled:opacity-40">{picked.length ? `Start practice · ${picked.reduce((s, u) => s + (counts[u]?.n ?? 0), 0)} questions` : "Select units to start"}</button>
+      <button disabled={!picked.length} onClick={start} className="mt-6 w-full rounded-full bg-blue-600 text-white font-semibold py-3 disabled:opacity-40">{picked.length ? `Start practice · ${picked.reduce((s, t) => s + (counts[t]?.n ?? 0), 0)} questions` : "Select topics to start"}</button>
     </main>
   );
 }
