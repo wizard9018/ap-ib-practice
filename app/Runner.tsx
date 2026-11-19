@@ -62,7 +62,8 @@ export default function Runner({ exam, attempt, email, onSave, onSubmit, onSignO
   const [usedDone, setUsedDone] = useState(st0.usedDone);       // seconds spent in sections already submitted
   const [lastUsed, setLastUsed] = useState(0);                  // seconds the section just submitted took
   const [spent, setSpent] = useState<Record<string, number>>(st0.spent ?? {});   // seconds per question, revisits add up
-  const [splitPercent, setSplitPercent] = useState(50);
+  // Official / Ivy / Tivitails passages are wide pages scanned at full width, so they get more of the screen by default
+  const [splitPercent, setSplitPercent] = useState(/^ssat-middle-(official|ivy|tivitails)-/.test(attempt.exam_id) ? 64 : 50);
   const [showNavigator, setShowNavigator] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
