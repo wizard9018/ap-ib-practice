@@ -21,6 +21,7 @@ function toRunnerExam(e: PublicExam): Exam {
 export default function App() {
   const [mode, setMode] = useState<"home" | "aphome" | "apphysics" | "appractice" | "apexam" | "ib" | "ssat" | "ssatexam">("home");
   const [ssatExam, setSsatExam] = useState("");
+  const [sci, setSci] = useState<"p1" | "p2">("p1");
   const [homeEmail, setHomeEmail] = useState<string | null>(null);
   const [homeLogin, setHomeLogin] = useState(false);
   useEffect(() => {
@@ -31,8 +32,8 @@ export default function App() {
   if (homeLogin) return (<><button onClick={() => setHomeLogin(false)} className="absolute left-4 top-4 text-sm text-blue-700 hover:underline">← Back</button><Login onSignedIn={() => setHomeLogin(false)} /></>);
   if (mode === "ib") return <IbPractice onBack={() => setMode("home")} />;
   if (mode === "appractice") return <ApPractice onBack={() => setMode("aphome")} onExam={() => setMode("apexam")} />;
-  if (mode === "aphome") return <ApHome onBack={() => setMode("home")} onPick={(c) => setMode(c === "calc" ? "appractice" : "apphysics")} />;
-  if (mode === "apphysics") return <ApPhysics onBack={() => setMode("aphome")} />;
+  if (mode === "aphome") return <ApHome onBack={() => setMode("home")} onPick={(c) => { if (c === "calc") setMode("appractice"); else { setSci(c); setMode("apphysics"); } }} />;
+  if (mode === "apphysics") return <ApPhysics key={sci} course={sci} onBack={() => setMode("aphome")} />;
   if (mode === "apexam") return <ApExam />;
   if (mode === "ssat") return <SsatHome onBack={() => setMode("home")} onStart={(id) => { setSsatExam(id); setMode("ssatexam"); }} />;
   if (mode === "ssatexam") return <ApExam examId={ssatExam} />;
@@ -93,8 +94,8 @@ const SSAT_ELEMENTARY_EXAMS = [
   { id: "ssat-elementary-practice-2", title: "Elementary Level Practice Test 2", note: "Quantitative · Verbal · Reading" },
 ];
 
-function ApHome({ onBack, onPick }: { onBack: () => void; onPick: (c: "calc" | "p1") => void }) {
-  const courses = [{ key: "calc" as const, name: "AP Calculus AB / BC", note: "Practice by topic, free response, timed mock exam" }, { key: "p1" as const, name: "AP Physics 1", note: "Multiple-choice practice by topic" }];
+function ApHome({ onBack, onPick }: { onBack: () => void; onPick: (c: "calc" | "p1" | "p2") => void }) {
+  const courses = [{ key: "calc" as const, name: "AP Calculus AB / BC", note: "Practice by topic, free response, timed mock exam" }, { key: "p1" as const, name: "AP Physics 1", note: "Multiple-choice practice by topic" }, { key: "p2" as const, name: "AP Physics 2", note: "Multiple-choice practice by topic" }];
   return (
     <main className="duo flex-1 flex items-center justify-center px-4 py-10 relative">
       <button onClick={onBack} className="absolute left-4 top-4 text-sm text-blue-700 hover:underline">← Back</button>
