@@ -15,6 +15,12 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
     setBusy(false);
     if (error) setMessage("Sign-in failed: incorrect email or password."); else onSignedIn();
   }
+  async function guest() {
+    setBusy(true); setMessage(null);
+    const { error } = await supabase.auth.signInWithPassword({ email: "guest@guest.apib.app", password: "guest-ap-ib-2026" });
+    setBusy(false);
+    if (error) setMessage("Guest sign-in failed. Please try again."); else onSignedIn();
+  }
   async function google() {
     setBusy(true); setMessage(null);
     // Supabase answers a disabled provider with a bare JSON error page, so ask first
@@ -50,6 +56,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
         <p className="text-center text-xs text-gray-400 mb-4">or use email</p>
         <button disabled={busy} className="w-full rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700 disabled:opacity-50">Sign in</button>
         <button type="button" disabled={busy || !email || password.length < 6} onClick={() => void signUp()} className="w-full mt-3 rounded-full border border-gray-300 text-gray-700 font-semibold py-3 hover:bg-gray-50 disabled:opacity-50">Create account</button>
+        <button type="button" disabled={busy} onClick={() => void guest()} className="w-full mt-3 rounded-full text-gray-600 font-semibold py-3 hover:bg-gray-50 disabled:opacity-50">Continue as guest</button>
       </form>
     </main>
   );
