@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/browser";
+import { supabase, GUEST_EMAIL } from "@/lib/browser";
 
 export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState("");
@@ -17,7 +17,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   }
   async function guest() {
     setBusy(true); setMessage(null);
-    const { error } = await supabase.auth.signInWithPassword({ email: "guest@guest.apib.app", password: "guest-ap-ib-2026" });
+    const { error } = await supabase.auth.signInWithPassword({ email: GUEST_EMAIL, password: "guest-ap-ib-2026" });
     setBusy(false);
     if (error) setMessage("Guest sign-in failed. Please try again."); else onSignedIn();
   }

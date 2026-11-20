@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/browser";
+import { supabase, GUEST_EMAIL } from "@/lib/browser";
 import type { Mark } from "@/lib/ib";
 import { Md, MdMath } from "./Md";
 import Navigator from "./Navigator";
@@ -148,7 +148,8 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   useEffect(() => {
     if (!doneLoaded) return;
     void (async () => {
-      const id = (await supabase.auth.getSession()).data.session?.user.id ?? null; setUid(id);
+      const u = (await supabase.auth.getSession()).data.session?.user;
+      const id = u && u.email !== GUEST_EMAIL ? u.id : null; setUid(id);
       if (!id) { setSynced(true); return; }
       const d: Done = {}, r: Record<string, boolean> = {};
       for (let from = 0; ; from += 1000) {

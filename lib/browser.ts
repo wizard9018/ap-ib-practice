@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 export const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(), process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!.trim());
 
+// the shared guest login: its practice progress stays in each browser (never synced), so computers do not mix
+export const GUEST_EMAIL = "guest@guest.apib.app";
+
 // calls our own API with the student's access token
 export async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   const token = (await supabase.auth.getSession()).data.session?.access_token;
