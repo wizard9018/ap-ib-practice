@@ -118,7 +118,6 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
   const [briefs, setBriefs] = useState<Brief[] | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"topics" | "fr" | "papers">("topics");
-  const [sel, setSel] = useState<Set<string>>(new Set());
   const [src, setSrc] = useState<Source | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [kind, setKind] = useState<"all" | "mc" | "fr" | "redo">("all");
@@ -188,7 +187,6 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
     for (const r of briefs ?? []) for (const p of r.papers ?? []) if (p.startsWith(course + "-")) { const e = (m[p] ??= { mc: 0, fr: 0, fin: 0 }); e[r.kind]++; if (done[r.id]) e.fin++; }
     return Object.entries(m).sort((x, y) => +y[0].slice(3) - +x[0].slice(3));
   }, [briefs, done, course]);
-  const selCount = useMemo(() => [...sel].reduce((n, t) => n + (stats[t] ? (tab === "fr" ? stats[t].fr : stats[t].mc + stats[t].fr) : 0), 0), [sel, stats, tab]);
   const shown = useMemo(() => kind === "redo"
     ? (rows ?? []).filter((r) => redoIds.includes(r.id)).map((r) => { const v = variants[r.id]; return v ? { ...r, prompt: v.prompt, choices: v.choices, answer: v.answer, figures: v.figures, variant: true } : r; })
     : (rows ?? []).filter((r) => kind === "all" || r.kind === kind), [rows, kind, redoIds, variants]);
@@ -214,7 +212,7 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
     setPicks((p) => ({ ...p, [r.id]: L })); mark(r.id, r.answer ? (L === r.answer ? "c" : "w") : 1); };
   const cross = (id: string, L: string) => setCrossed((c) => { const cur = c[id] ?? []; return { ...c, [id]: cur.includes(L) ? cur.filter((x) => x !== L) : [...cur, L] }; });
   const open = (s: Source) => { setSrc(s); setRows(null); setIdx(0); setKind(s.only ?? "all"); loadRows(s).then(setRows).catch((e: Error) => setError(e.message)); };
-  const toggle = (codes: string[], on: boolean) => setSel((cur) => { const n = new Set(cur); for (const c of codes) { if (on) n.add(c); else n.delete(c); } return n; });
+  const start = (topics: string[], title: string) => open({ title, label: "TOPIC PRACTICE", topics, only: tab === "fr" ? "fr" : undefined });
   const onMove = (e: React.PointerEvent) => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId) || !splitRef.current) return;
     const r = splitRef.current.getBoundingClientRect();
@@ -253,23 +251,21 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
       </div>
       <div className="flex gap-2 mt-4 border-b border-gray-200">
         {([["topics", "Practice by topic"], ["fr", "Free response by topic"], ["papers", "Mock exams"]] as const).map(([t, label]) => (
-          <button key={t} onClick={() => { setTab(t); setSel(new Set()); }} className={`text-sm font-semibold px-3 py-2 -mb-px border-b-2 ${tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>{label}</button>
+          <button key={t} onClick={() => setTab(t)} className={`text-sm font-semibold px-3 py-2 -mb-px border-b-2 ${tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>{label}</button>
         ))}
       </div>
       {tab !== "papers" ? (
         <>
-          <p className="text-gray-600 mt-3 text-sm">{tab === "fr" ? "Tick the topics whose free-response questions you want to practice together." : "Tick the topics you want to practice together."}{course === "bc" && " Topics marked BC only are not on the AB exam."}</p>
+          <p className="text-gray-600 mt-3 text-sm">{tab === "fr" ? "Click a topic or a unit to start its free-response questions." : "Click a topic or a unit to start practicing."}{course === "bc" && " Topics marked BC only are not on the AB exam."}</p>
           <div className="mt-4 space-y-4 text-sm">
             {unitsOf(course).map(([u, name]) => {
               const codes = topicsOfUnit(u, course).filter((t) => stats[t] && (tab !== "fr" || stats[t].fr > 0));
               if (codes.length === 0) return null;
-              const all = codes.length > 0 && codes.every((t) => sel.has(t));
               return (
                 <div key={u} className="rounded-lg bg-gray-50 p-3">
-                  <label className="flex items-center gap-2 font-semibold cursor-pointer">
-                    <input type="checkbox" checked={all} onChange={(e) => toggle(codes, e.target.checked)} />
+                  <button type="button" onClick={() => start(codes, `Unit ${u}: ${name}`)} className="flex w-full items-center gap-2 font-semibold text-left hover:text-blue-700">
                     {complete(codes, tab === "fr" ? "fr" : undefined) && <span className="text-green-600" title="All done, wrong answers redone">✓</span>}Unit {u}: {name}
-                  </label>
+                  </button>
                   <div className="mt-2 space-y-1 pl-6">
                     {codes.flatMap((t) => {
                       const m = MERGES.find((g) => g.codes.includes(t));
@@ -277,24 +273,18 @@ function Practice({ course, onCourse, onBack, onExam }: { course: Course; onCour
                       const cs = m ? m.codes.filter((c) => codes.includes(c)) : [t];
                       const sum = (k: "mc" | "fr" | "fin" | "frFin") => cs.reduce((n, c) => n + stats[c][k], 0);
                       return [(
-                        <label key={t} className="flex items-start gap-2 cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5">
-                          <input type="checkbox" className="mt-1" checked={cs.every((c) => sel.has(c))} onChange={(e) => toggle(cs, e.target.checked)} />
+                        <button type="button" key={t} onClick={() => start(cs, m ? m.name : `${t} ${TOPICS[t].name}`)} className="flex w-full items-start gap-2 text-left hover:bg-blue-50 rounded px-1 py-0.5">
                           <span className="flex-1">
                             {complete(cs, tab === "fr" ? "fr" : undefined) && <span className="text-green-600 font-bold mr-1" title="All done, wrong answers redone">✓</span>}{m ? m.name : `${t} ${TOPICS[t].name}`}{cs.every((c) => TOPICS[c].bcOnly) && <span className="ml-2 text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5">BC only</span>}
                           </span>
                           <span className="text-gray-500 text-xs whitespace-nowrap pt-0.5">{tab === "fr" ? `${sum("fr")} FR · ${sum("frFin")} done` : `${sum("mc")} MC · ${sum("fr")} FR · ${sum("fin")} done`}</span>
-                        </label>
+                        </button>
                       )];
                     })}
                   </div>
                 </div>
               );
             })}
-          </div>
-          <div className="sticky bottom-0 bg-white pt-4 mt-2 flex gap-3">
-            <button disabled={selCount === 0} onClick={() => open({ title: `${sel.size} topic${sel.size > 1 ? "s" : ""}`, label: "TOPIC PRACTICE", topics: [...sel], only: tab === "fr" ? "fr" : undefined })}
-              className="flex-1 rounded-full bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700 disabled:opacity-40">{selCount === 0 ? "Select topics to start" : `Start practice · ${selCount} ${tab === "fr" ? "free-response questions" : "questions"}`}</button>
-            {sel.size > 0 && <button onClick={() => setSel(new Set())} className="text-sm text-gray-500 underline">Clear</button>}
           </div>
         </>
       ) : (
